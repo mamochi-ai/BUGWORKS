@@ -1,10 +1,10 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
-import type { DeviceType } from '../sim/layout';
+import { GEAR_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
 /** パレットに並べる装置 */
-const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal'];
+const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge'];
 /** パレットのボタンに出す短い名前（正式名はボタンの title に出す） */
 const PALETTE_LABELS: Record<DeviceType, string> = {
   rail: 'レール',
@@ -13,6 +13,10 @@ const PALETTE_LABELS: Record<DeviceType, string> = {
   spring: 'バネ',
   platform: '台',
   goal: 'ゴール',
+  paddle: '羽根車',
+  gearbox: '歯車',
+  shaft: '軸',
+  bridge: '可動橋',
 };
 import { PARAM_SPECS, formatParam, paramValue, stepParam } from '../edit/params';
 import { planLauncher } from '../sim/launcher';
@@ -59,6 +63,11 @@ export class EditPanel {
         <button type="button" data-e="redo" aria-label="やり直す"><i>↷</i><span>やり直し</span></button>
       </div>
       <p class="msg" data-k="msg" role="status" aria-live="polite"></p>
+      <h2>サンプル</h2>
+      <div class="row">
+        <button type="button" data-e="sample-spring">バネでゴール</button>
+        <button type="button" data-e="sample-gear">歯車で可動橋</button>
+      </div>
     `;
     root.appendChild(panel);
     panel.querySelectorAll<HTMLElement>('[data-k]').forEach((n) => (this.el[n.dataset.k!] = n));
@@ -109,7 +118,11 @@ export class EditPanel {
       case 'add-launcher':
       case 'add-spring':
       case 'add-goal':
-      case 'add-platform': {
+      case 'add-platform':
+      case 'add-paddle':
+      case 'add-gearbox':
+      case 'add-shaft':
+      case 'add-bridge': {
         const p = this.deps.addPosition();
         editor.addDevice(action.slice(4) as DeviceType, p.x, p.z);
         break;
@@ -126,6 +139,12 @@ export class EditPanel {
         break;
       case 'down':
         editor.changeHeight(id!, -1);
+        break;
+      case 'sample-spring':
+        editor.loadLayout(VERTICAL_SLICE_LAYOUT.devices, 'サンプル「バネでゴール」を読み込みました');
+        break;
+      case 'sample-gear':
+        editor.loadLayout(GEAR_SAMPLE_LAYOUT.devices, 'サンプル「歯車で可動橋」を読み込みました。1個目の球は橋が下りる前に着くので落ちます');
         break;
       case 'undo':
         editor.undo();

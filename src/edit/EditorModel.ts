@@ -171,6 +171,12 @@ export class EditorModel {
     return true;
   }
 
+  /** 配置をまるごと差し替える（見本の読み込みなど。元に戻せる） */
+  loadLayout(devices: readonly PlacedDevice[], text: string): void {
+    this.commit(clone(devices), text);
+    this.select(null);
+  }
+
   undo(): boolean {
     const prev = this.past.pop();
     if (!prev) return false;

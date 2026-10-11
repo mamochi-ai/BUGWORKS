@@ -59,6 +59,7 @@ export class LabView {
   /** alpha: 前tick→現tickの補間係数（描画は可変FPS、物理は固定120Hz） */
   render(camera: THREE.Camera, alpha: number): void {
     this.devices.setLauncherCharge(launcherCharge(this.sim));
+    this.devices.setDriveAngles(this.sim.driveAngles());
     this.devices.setSpringCompression(new Map(this.sim.springCompressions().map((s) => [s.deviceId, s.offset])));
     // 球が入ったゴールは 0.6 秒かけて光が引く
     const flashTicks = 0.6 * PHYSICS_HZ;
