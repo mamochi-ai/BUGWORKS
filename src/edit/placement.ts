@@ -1,7 +1,7 @@
-import { getDeviceDef, getPort, type Vec3 } from '../sim/catalog';
+import { getDeviceDef, type Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { platformTop, platformHeight } from '../sim/goal';
-import { portWorldPosition, rotateY } from '../sim/railGeometry';
+import { localPort, portWorldPosition, rotateY } from '../sim/railGeometry';
 
 /**
  * 置いた面の上に乗る装置（DECISIONS.md D-23）。高さは手で変えず、真下の台の上面（無ければ床）に合わせる。
@@ -87,7 +87,7 @@ export interface PlacementEvaluation {
 }
 
 export function portWorldDirection(device: PlacedDevice, portId: string): Vec3 {
-  const port = getPort(getDeviceDef(device.type), portId);
+  const port = localPort(device, portId);
   return rotateY(port.direction, (device.rotationYDeg * Math.PI) / 180);
 }
 

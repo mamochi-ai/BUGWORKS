@@ -66,6 +66,19 @@ export function parseDeviceCatalog(json: { devices: unknown[] }): Map<string, De
 const PROTOTYPE_DEVICES: DeviceDef[] = [
   { id: 'goal', name: 'ゴール', size: [0.8, 0.4, 0.8], ports: [], params: {}, movingParts: [], prototypeOnly: true },
   { id: 'platform', name: '台', size: [1.6, 1, 1.6], ports: [], params: { heightMeters: 1 }, movingParts: [], prototypeOnly: true },
+  {
+    // ポートは左に曲がる形。右に曲がる形は params.turn=-1 で左右を反転する（curveGeometry.ts）
+    id: 'curve',
+    name: 'カーブレール',
+    size: [1.5, 0.4, 1.5],
+    ports: [
+      { id: 'ball_in', type: 'ball', position: [-0.5, 0.35, -0.75], direction: [0, 0, -1] },
+      { id: 'ball_out', type: 'ball', position: [0.75, 0.15, 0.5], direction: [1, 0, 0] },
+    ],
+    params: { turn: 1 },
+    movingParts: [],
+    prototypeOnly: true,
+  },
 ];
 
 /** 装置定義は reference/shiyou_specs/devices.v0.1.json を出典とする（マスター仕様 §3）。試作の追加分は別扱い */

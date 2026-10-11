@@ -2,6 +2,7 @@ import type { DeviceType, PlacedDevice } from '../sim/layout';
 import { launcherParams } from '../sim/launcher';
 import { springParams } from '../sim/spring';
 import { platformHeight } from '../sim/goal';
+import { curveTurn } from '../sim/curveGeometry';
 
 /**
  * 画面で変えられる装置の設定（範囲と刻みは試作値, DECISIONS.md D-22）。
@@ -14,6 +15,8 @@ export interface ParamSpec {
   min: number;
   max: number;
   step: number;
+  /** 数値ではなく選択肢で表す設定（左/右など）。−／＋ で前後の選択肢に移る */
+  choices?: readonly { value: number; label: string }[];
 }
 
 export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
@@ -28,6 +31,20 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
     { key: 'tiltDegrees', label: '天板の傾き', unit: '°', min: 0, max: 30, step: 15 },
   ],
   goal: [],
+  curve: [
+    {
+      key: 'turn',
+      label: '曲がる向き',
+      unit: '',
+      min: -1,
+      max: 1,
+      step: 2,
+      choices: [
+        { value: -1, label: '右' },
+        { value: 1, label: '左' },
+      ],
+    },
+  ],
   platform: [{ key: 'heightMeters', label: '高さ', unit: 'm', min: 0.2, max: 2, step: 0.2 }],
 };
 
@@ -35,9 +52,12 @@ export function findSpec(type: DeviceType, key: string): ParamSpec | undefined {
   return PARAM_SPECS[type].find((s) => s.key === key);
 }
 
-/** 範囲内に収め、刻みに合わせる */
+/** 範囲内に収め、刻みに合わせる（選択肢なら一番近い選択肢） */
 export function normalizeParam(spec: ParamSpec, value: number): number {
-  if (!Number.isFinite(value)) return spec.min;
+  if (!Number.isFinite(value)) return spec.choices ? spec.choices[0].value : spec.min;
+  if (spec.choices) {
+    return spec.choices.reduce((best, c) => (Math.abs(c.value - value) < Math.abs(best - value) ? c.value : best), spec.choices[0].value);
+  }
   const clamped = Math.min(spec.max, Math.max(spec.min, value));
   const snapped = spec.min + Math.round((clamped - spec.min) / spec.step) * spec.step;
   return Math.round(snapped * 1000) / 1000;
@@ -52,11 +72,25 @@ export function paramValue(device: PlacedDevice, key: string): number {
         ? { ...springParams(device) }
         : device.type === 'platform'
           ? { heightMeters: platformHeight(device) }
-          : {};
+          : device.type === 'curve'
+            ? { turn: curveTurn(device) }
+            : {};
   return all[key] ?? NaN;
 }
 
+/** −（dir=-1）／＋（dir=+1）を押したときの次の値 */
+export function stepParam(spec: ParamSpec, value: number, dir: 1 | -1): number {
+  if (spec.choices) {
+    const i = spec.choices.findIndex((c) => c.value === value);
+    const j = Math.min(spec.choices.length - 1, Math.max(0, i + dir));
+    return spec.choices[j].value;
+  }
+  return normalizeParam(spec, value + dir * spec.step);
+}
+
 export function formatParam(spec: ParamSpec, value: number): string {
+  const choice = spec.choices?.find((c) => c.value === value);
+  if (choice) return choice.label;
   const digits = spec.step < 1 ? 1 : 0;
   return `${value.toFixed(digits)}${spec.unit}`;
 }

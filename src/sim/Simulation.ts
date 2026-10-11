@@ -5,6 +5,7 @@ import { buildLabBoxes, type LabBox } from './lab';
 import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
 import type { PlacedDevice, SliceLayout } from './layout';
 import { inGoal, platformHeight } from './goal';
+import { curveMesh, curveTurn } from './curveGeometry';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -425,6 +426,7 @@ export class Simulation {
     }
 
     for (const track of this.tracks) this.addRailColliders(track);
+    for (const d of this._layout.devices) if (d.type === 'curve') this.addCurveColliders(d);
 
     for (const d of this._layout.devices) {
       if (d.type === 'goal') this.goals.push({ deviceId: d.id, device: d, hits: 0, firstHitTick: null, lastHitTick: null });
@@ -513,6 +515,21 @@ export class Simulation {
     const b = PLATE_EDGE_ROUNDING;
     const desc = isPlate ? R.ColliderDesc.roundCuboid(hx - b, hy - b, hz - b, b) : R.ColliderDesc.cuboid(hx, hy, hz);
     return desc.setTranslation(...part.offset).setFriction(MATERIAL.railFriction);
+  }
+
+  /** カーブレール：弧に沿った走行面と側壁の三角形メッシュ */
+  private addCurveColliders(d: PlacedDevice): void {
+    const R = this.R;
+    const { vertices, indices } = curveMesh(curveTurn(d), RAIL_PROFILE.innerWidth / 2, RAIL_PROFILE.wallHeight, JOINT_DROP);
+    const body = this.world.createRigidBody(
+      R.RigidBodyDesc.fixed()
+        .setTranslation(...d.position)
+        .setRotation(quatFromYawPitch((d.rotationYDeg * Math.PI) / 180, 0)),
+    );
+    this.world.createCollider(
+      R.ColliderDesc.trimesh(vertices, indices, R.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(MATERIAL.railFriction),
+      body,
+    );
   }
 
   /** レール＝底板＋左右の側壁。走行面（底板上面）がポートを結ぶ線分を通る */
