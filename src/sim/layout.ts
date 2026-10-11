@@ -17,7 +17,7 @@ export interface PlacedDevice {
   params?: Record<string, number>;
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve';
 
 export interface SliceLayout {
   seed: number;

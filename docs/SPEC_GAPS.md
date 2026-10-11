@@ -11,7 +11,7 @@
 | G-01 | ステージ資料の優先度が未定義。マスター §2/§12 は「ステージ数・順序は未確定」、ステージ資料 v1.0 は 8章×5＝40ステージを提案 | MASTER §2,§6,§12 / stages README | 試作はステージ未実装。優先順位表への追記が必要 |
 | G-02 | 物理刻み：装置JSON `physicsStep=1/60`、隠しバグREADME「推奨60Hz」 vs マスター・検証設定・stage1資料は 120Hz | devices.v0.1 / README_bug_spec / verification.config | 120Hz を採用（マスター準拠）。バグ条件・制限の tick 表記は60Hz前提の可能性があり、秒定義へ直すか換算するか要決定 |
 | G-03 | グリッド：装置/建築JSONは 0.25m、`stage1_blockout.json` は `gridSize: 1` | devices / architecture / stage1_blockout | 試作は 0.25m グリッドを表示 |
-| G-04 | 装置ID体系の不一致（ゴール・台は試作で追加済み, DECISIONS D-23）：装置JSON `launcher`,`rail`,`gearbox`,`spring`,`magnet`,`rotator` vs blockout `ball_launcher`,`straight_rail`,`curved_rail`,`spring_pad`,`gear`(teeth),`goal_sensor`,`raised_platform`,`weight_trigger`,`movable_bridge` | devices / stage1_blockout | blockout の多くの種類（カーブレール、ゴール、台、トリガー、可動橋）は装置JSONに定義が無い。装置定義の追加か対応表が必要 |
+| G-04 | 装置ID体系の不一致（ゴール・台・カーブレールは試作で追加済み, DECISIONS D-23/D-24）：装置JSON `launcher`,`rail`,`gearbox`,`spring`,`magnet`,`rotator` vs blockout `ball_launcher`,`straight_rail`,`curved_rail`,`spring_pad`,`gear`(teeth),`goal_sensor`,`raised_platform`,`weight_trigger`,`movable_bridge` | devices / stage1_blockout | blockout の多くの種類（カーブレール、ゴール、台、トリガー、可動橋）は装置JSONに定義が無い。装置定義の追加か対応表が必要 |
 | G-05 | 向きの不一致：装置JSONのレールは前方 +Z。blockout は `rotationYDegrees: 0` のままレールを +X 方向に並べている | devices / stage1_blockout | blockout をそのまま読むとレールが進行方向に対し横向きになる。どちらかの修正が必要 |
 | G-06 | ステージ1の内容が資料間で異なる。v1.0：1-1「あと一本」1-2「角度の問題」1-3「三度目の正直」1-4「上に行きたい（バネ）」。stage1 v0.1：1-1「はじめの一歩」1-2「バネでジャンプ」1-3「曲がって運ぶ」1-4「歯車で動かす」。歯車は v1.0 では第3章 | stages README / stage1 README・blockout | 未実装。どちらを正とするか要決定 |
 | G-07 | 操作の割り当て：マスター「左クリック選択・ドラッグ配置・右ドラッグ回転」／操作ガイド画像「右ドラッグ回転」と「右クリック削除」が同じボタン／ステージ資料「1本指ドラッグで回転」 vs マスター「1本指で選択/ドラッグ、空き領域で視点操作」 | MASTER §8 / controls.png / stages README | 「部品上なら部品ドラッグ、空き領域なら回転」で試作済み（DECISIONS D-17）。iPad 実機で要評価 |
@@ -35,6 +35,7 @@
 
 | 項目 | 仕様 | 試作の状態 |
 |---|---|---|
+| カーブレール | ステージ資料のみ（装置JSONに無い） | 試作で追加（90°・半径1.25m、左右は設定）（D-24） |
 | ゴール・台 | ステージ資料のみ（装置JSONに無い） | 試作で追加（ゴールで回収して数え、最初の1個でクリア表示。台は高さ設定可）（D-23） |
 | バネ装置 | 主要装置 | 実装済み（受け止め→縮み→打ち上げ、打ち上げの速さと天板の傾きの設定）。impact_signal は未実装（D-21, D-22） |
 | 鉄球発射機 | 主要装置 | 実装済み（配置・接続・間隔ごとの発射・球の上限・速さ/角度/間隔の設定）。trigger 信号は未実装（D-18, D-19, D-22） |

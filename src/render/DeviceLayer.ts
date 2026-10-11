@@ -5,6 +5,7 @@ import type { PlacedDevice } from '../sim/layout';
 import { buildRailTrack, portWorldPosition } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
 import { planLauncher } from '../sim/launcher';
+import { curveFrame, curveToWorld, curveTurn } from '../sim/curveGeometry';
 import { LauncherModelFactory } from './LauncherModel';
 import { SpringModelFactory } from './SpringModel';
 import { GoalModelFactory } from './GoalModels';
@@ -69,6 +70,8 @@ export class DeviceLayer {
       const group =
         d.type === 'rail'
           ? this.railFactory.createRail(buildRailTrack(d))
+          : d.type === 'curve'
+            ? this.railFactory.createCurve(d)
           : d.type === 'launcher'
             ? this.launcherFactory.create(d, launcherAngle)
             : d.type === 'spring'
@@ -141,9 +144,10 @@ export class DeviceLayer {
     // 発射機の出口は発射機自身が支えるので、そこに支柱は立てない
     const seen = new Set<string>(devices.filter((d) => d.type === 'launcher').map((d) => key(portWorldPosition(d, 'ball_out'))));
     for (const d of devices) {
-      if (d.type !== 'rail') continue;
-      for (const portId of ['ball_in', 'ball_out']) {
-        const p = portWorldPosition(d, portId);
+      if (d.type !== 'rail' && d.type !== 'curve') continue;
+      // カーブは弧の中央にも支柱を立てる
+      const extra: Vec3[] = d.type === 'curve' ? [curveToWorld(d, curveFrame(curveTurn(d), 0.5).pos)] : [];
+      for (const p of [...['ball_in', 'ball_out'].map((id) => portWorldPosition(d, id)), ...extra]) {
         if (seen.has(key(p))) continue;
         seen.add(key(p));
         const s = this.railFactory.createSupport(p);

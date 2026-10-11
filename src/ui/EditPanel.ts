@@ -4,8 +4,17 @@ import type { DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
 /** パレットに並べる装置 */
-const PALETTE_TYPES: DeviceType[] = ['rail', 'launcher', 'spring', 'platform', 'goal'];
-import { PARAM_SPECS, formatParam, paramValue } from '../edit/params';
+const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal'];
+/** パレットのボタンに出す短い名前（正式名はボタンの title に出す） */
+const PALETTE_LABELS: Record<DeviceType, string> = {
+  rail: 'レール',
+  curve: 'カーブ',
+  launcher: '発射機',
+  spring: 'バネ',
+  platform: '台',
+  goal: 'ゴール',
+};
+import { PARAM_SPECS, formatParam, paramValue, stepParam } from '../edit/params';
 import { planLauncher } from '../sim/launcher';
 import type { SimulationController } from '../sim/SimulationController';
 
@@ -33,7 +42,7 @@ export class EditPanel {
     panel.innerHTML = `
       <h2>装置</h2>
       <div class="palette">
-        ${PALETTE_TYPES.map((t) => `<button type="button" data-e="add-${t}" class="add"><i>＋</i><span>${getDeviceDef(t).name}</span></button>`).join('')}
+        ${PALETTE_TYPES.map((t) => `<button type="button" data-e="add-${t}" class="add" title="${getDeviceDef(t).name}を追加"><i>＋</i><span>${PALETTE_LABELS[t]}</span></button>`).join('')}
       </div>
       <div class="sel" data-k="sel"></div>
       <div class="row">
@@ -80,7 +89,7 @@ export class EditPanel {
       const spec = PARAM_SPECS[sel.type].find((s) => s.key === b.dataset.param);
       if (!spec) return;
       deps.ctl.ensureEditable();
-      deps.editor.setParam(sel.id, spec.key, paramValue(sel, spec.key) + Number(b.dataset.dir) * spec.step);
+      deps.editor.setParam(sel.id, spec.key, stepParam(spec, paramValue(sel, spec.key), Number(b.dataset.dir) as 1 | -1));
     });
 
     deps.editor.onChange(() => this.sync());
@@ -96,6 +105,7 @@ export class EditPanel {
     ctl.ensureEditable();
     switch (action) {
       case 'add-rail':
+      case 'add-curve':
       case 'add-launcher':
       case 'add-spring':
       case 'add-goal':
@@ -147,9 +157,9 @@ export class EditPanel {
           return `
           <div class="param-row">
             <span class="param-label">${label}</span>
-            <button type="button" data-param="${spec.key}" data-dir="-1" aria-label="${label}を下げる" ${locked || v <= spec.min ? 'disabled' : ''}>−</button>
+            <button type="button" data-param="${spec.key}" data-dir="-1" aria-label="${label}を${spec.choices ? '前の選択肢に' : '下げる'}" ${locked || stepParam(spec, v, -1) === v ? 'disabled' : ''}>−</button>
             <output aria-live="polite">${locked ? '0°' : formatParam(spec, v)}</output>
-            <button type="button" data-param="${spec.key}" data-dir="1" aria-label="${label}を上げる" ${locked || v >= spec.max ? 'disabled' : ''}>＋</button>
+            <button type="button" data-param="${spec.key}" data-dir="1" aria-label="${label}を${spec.choices ? '次の選択肢に' : '上げる'}" ${locked || stepParam(spec, v, 1) === v ? 'disabled' : ''}>＋</button>
             ${locked ? `<small>レールにつないでいる間は 0°（外すと ${formatParam(spec, v)}）</small>` : ''}
           </div>`;
         })

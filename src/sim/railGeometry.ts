@@ -1,4 +1,5 @@
-import { getDeviceDef, getPort, type Vec3 } from './catalog';
+import { getDeviceDef, getPort, type PortDef, type Vec3 } from './catalog';
+import { curvePorts, curveTurn } from './curveGeometry';
 import type { PlacedDevice } from './layout';
 
 /** 試作用の鉄球半径（m）。仕様に記載なし → DECISIONS.md D-06 */
@@ -43,10 +44,19 @@ export function scale(a: Vec3, k: number): Vec3 {
   return [a[0] * k, a[1] * k, a[2] * k];
 }
 
+/** 装置のポート（装置ローカル）。カーブは曲がる向きで左右が変わる */
+export function localPort(device: PlacedDevice, portId: string): PortDef {
+  if (device.type === 'curve') {
+    const p = curvePorts(curveTurn(device)).find((x) => x.id === portId);
+    if (!p) throw new Error(`装置 ${device.id} にポート ${portId} がありません`);
+    return p;
+  }
+  return getPort(getDeviceDef(device.type), portId);
+}
+
 /** 装置ローカル座標のポートをワールド座標へ */
 export function portWorldPosition(device: PlacedDevice, portId: string): Vec3 {
-  const def = getDeviceDef(device.type);
-  const port = getPort(def, portId);
+  const port = localPort(device, portId);
   let local = port.position;
   if (device.type === 'rail' && portId === 'ball_in') {
     local = [local[0], railInY(device), local[2]];

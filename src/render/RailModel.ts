@@ -5,6 +5,9 @@ import type { RailTrack } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
 import { PALETTE } from './palette';
 import { railVisualProfile } from './railVisualProfile';
+import { getDeviceDef } from '../sim/catalog';
+import type { PlacedDevice } from '../sim/layout';
+import { CURVE, curveFrame, curveTurn } from '../sim/curveGeometry';
 
 /**
  * レールの見た目（試作）。デザイン画 rail_straight_long / rail_connector / rail_support_low を参考に、
@@ -89,6 +92,57 @@ export class RailModelFactory {
     const pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, track.length), this.mats.pick);
     pick.geometry.userData.ownedByDevice = true;
     pick.position.y = 0.07;
+    pick.name = 'pick_proxy';
+    group.add(pick);
+    return group;
+  }
+
+  /** カーブレール（装置ローカルで作り、装置の位置・回転のグループに入れる） */
+  createCurve(device: PlacedDevice): THREE.Group {
+    const p = this.profile;
+    const turn = curveTurn(device);
+    const group = new THREE.Group();
+    group.name = device.id;
+    group.position.set(...device.position);
+    group.rotation.y = (device.rotationYDeg * Math.PI) / 180;
+
+    // 鋼管：弧の各断面で、横 s・高さ h だけずらした点をつないだ曲線
+    const offsetCurve = (s: number, h: number) =>
+      new THREE.CatmullRomCurve3(
+        Array.from({ length: CURVE.segments + 1 }, (_, i) => {
+          const f = curveFrame(turn, i / CURVE.segments);
+          return new THREE.Vector3(...f.pos.map((v, k) => v + f.side[k] * s + f.normal[k] * h));
+        }),
+      );
+    for (const side of [-1, 1]) {
+      for (const [x, y, r] of [
+        [p.carrier.x, p.carrier.y, p.carrier.radius],
+        [p.guard.x, p.guard.y, p.guard.radius],
+      ]) {
+        const geo = new THREE.TubeGeometry(offsetCurve(side * x, y), CURVE.segments * 2, r, 12, false);
+        geo.userData.ownedByDevice = true;
+        const m = new THREE.Mesh(geo, this.mats.steel);
+        m.castShadow = true;
+        m.receiveShadow = true;
+        group.add(m);
+      }
+    }
+    // 両端と中央の金具（弧の向きに合わせる）
+    for (const t of [0, 0.5, 1]) {
+      const f = curveFrame(turn, t);
+      const along = t === 0 ? p.collar.length / 2 : t === 1 ? -p.collar.length / 2 : 0;
+      const collar = this.createCollar(0);
+      const at = f.pos.map((v, k) => v + f.tangent[k] * along + f.normal[k] * p.collar.centerY);
+      collar.position.set(at[0], at[1], at[2]);
+      collar.lookAt(collar.position.clone().add(new THREE.Vector3(...f.tangent)));
+      group.add(collar);
+    }
+    // タッチ用の当たり判定（外形の箱）
+    const [sx, , sz] = getDeviceDef('curve').size;
+    const pickGeo = new THREE.BoxGeometry(sx, 0.5, sz);
+    pickGeo.userData.ownedByDevice = true;
+    const pick = new THREE.Mesh(pickGeo, this.mats.pick);
+    pick.position.y = 0.25;
     pick.name = 'pick_proxy';
     group.add(pick);
     return group;
