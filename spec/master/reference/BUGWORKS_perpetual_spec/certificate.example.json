@@ -1,0 +1,16 @@
+{
+  "certificateVersion": "0.1",
+  "game": "BUGWORKS",
+  "machineName": "無限ループ試作機",
+  "status": "VERIFIED",
+  "verificationMethod": "bounded_periodic_replay",
+  "blueprintSha256": "<SHA256_OF_CANONICAL_BLUEPRINT>",
+  "engineVersion": "<ENGINE_VERSION>",
+  "physicsProfile": "<PHYSICS_PROFILE>",
+  "seed": 404,
+  "periodSteps": 960,
+  "confirmedCycles": 3,
+  "outputEventsPerCycle": [2, 2, 2],
+  "triggeredBugIds": ["infinite_loop"],
+  "disclaimer": "ゲーム内ルールに基づく有限回の周期再検証結果。現実の永久機関や数学的な無限継続の証明ではありません。"
+}

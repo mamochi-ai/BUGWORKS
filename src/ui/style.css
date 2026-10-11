@@ -1,0 +1,79 @@
+:root {
+  --bg: #14171b;
+  --panel: rgba(24, 28, 33, 0.86);
+  --line: #3a414b;
+  --text: #e6e9ee;
+  --muted: #9aa3ae;
+  --orange: #ff7a1a;
+  --cyan: #3fd4ff;
+  --tap: 52px; /* iPad向けのタップ領域（44pt以上） */
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+}
+#viewport { position: fixed; inset: 0; }
+#viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+
+.hud-top {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left));
+  display: flex; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 14px;
+}
+.brand { font-weight: 800; letter-spacing: 0.08em; color: var(--orange); }
+.brand small { color: var(--muted); font-weight: 500; letter-spacing: 0; margin-left: 6px; }
+.status { font-weight: 700; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); }
+.status[data-state='running'] { border-color: var(--cyan); color: var(--cyan); }
+.status[data-state='paused'] { border-color: var(--orange); color: var(--orange); }
+
+.readout {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right));
+  display: grid; grid-template-columns: repeat(3, auto); gap: 4px 14px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.readout span { color: var(--muted); margin-right: 6px; }
+.readout .warn { grid-column: 1 / -1; color: var(--orange); font-weight: 700; }
+
+.controls {
+  position: absolute; left: 0; right: 0; margin: 0 auto; width: max-content; max-width: calc(100vw - 24px);
+  bottom: max(16px, env(safe-area-inset-bottom)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px;
+}
+.controls button {
+  min-width: var(--tap); min-height: var(--tap); padding: 6px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: #262b32; color: var(--text); font-size: 15px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; touch-action: manipulation;
+}
+.controls button i { font-style: normal; font-size: 18px; width: 1.2em; text-align: center; }
+.controls button:active { transform: translateY(1px); background: #30363e; }
+.controls button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.controls button.primary { background: var(--orange); border-color: var(--orange); color: #1a1205; min-width: 140px; }
+
+.help {
+  position: absolute; left: 0; right: 0; margin: 0 auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 84px);
+  width: min(560px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 16px; font-size: 14px; line-height: 1.6;
+}
+.help h2 { margin: 0 0 6px; font-size: 15px; color: var(--cyan); }
+.help dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+.help dt { color: var(--muted); }
+.help dd { margin: 0; }
+.help p { margin: 8px 0 0; color: var(--muted); }
+
+.boot { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); }
+
+@media (max-width: 700px) {
+  .readout { grid-template-columns: repeat(2, auto); top: auto; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 136px); right: 12px; }
+  .controls button span { display: none; }
+  .controls button.primary { min-width: var(--tap); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .controls button:active { transform: none; }
+}

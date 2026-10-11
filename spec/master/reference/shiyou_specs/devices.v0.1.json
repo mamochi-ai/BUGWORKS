@@ -1,0 +1,276 @@
+{
+  "formatVersion": "0.1",
+  "units": "meters",
+  "upAxis": "Y",
+  "forwardAxis": "+Z",
+  "gridSize": 0.25,
+  "physicsStep": 0.016666666666666666,
+  "devices": [
+    {
+      "id": "launcher",
+      "name": "鉄球発射機",
+      "size": [
+        1,
+        1,
+        1.4
+      ],
+      "ports": [
+        {
+          "id": "ball_out",
+          "type": "ball",
+          "position": [
+            0,
+            0.75,
+            0.65
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "id": "trigger",
+          "type": "signal",
+          "position": [
+            -0.5,
+            0.3,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ]
+        }
+      ],
+      "params": {
+        "launchSpeed": 5,
+        "angleDegrees": 45,
+        "cooldownSeconds": 1
+      },
+      "movingParts": [
+        "arm",
+        "spring",
+        "angleBase"
+      ]
+    },
+    {
+      "id": "rail",
+      "name": "レール",
+      "size": [
+        0.5,
+        0.4,
+        2
+      ],
+      "ports": [
+        {
+          "id": "ball_in",
+          "type": "ball",
+          "position": [
+            0,
+            0.35,
+            -1
+          ],
+          "direction": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "ball_out",
+          "type": "ball",
+          "position": [
+            0,
+            0.15,
+            1
+          ],
+          "direction": [
+            0,
+            0,
+            1
+          ]
+        }
+      ],
+      "params": {
+        "slopeMeters": 0.2
+      },
+      "movingParts": []
+    },
+    {
+      "id": "gearbox",
+      "name": "歯車装置",
+      "size": [
+        1.5,
+        1.2,
+        0.8
+      ],
+      "ports": [
+        {
+          "id": "shaft_in",
+          "type": "shaft",
+          "position": [
+            -0.75,
+            0.65,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "shaft_out",
+          "type": "shaft",
+          "position": [
+            0.75,
+            0.65,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ]
+        }
+      ],
+      "params": {
+        "gearRatio": 2
+      },
+      "movingParts": [
+        "gearLarge",
+        "gearMedium",
+        "gearSmall",
+        "gearIdler"
+      ]
+    },
+    {
+      "id": "spring",
+      "name": "バネ装置",
+      "size": [
+        0.8,
+        0.65,
+        0.8
+      ],
+      "ports": [
+        {
+          "id": "impact",
+          "type": "ball",
+          "position": [
+            0,
+            0.65,
+            0
+          ],
+          "direction": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "id": "impact_signal",
+          "type": "signal",
+          "position": [
+            0.4,
+            0.25,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ]
+        }
+      ],
+      "params": {
+        "restitution": 0.85,
+        "maxCompression": 0.25
+      },
+      "movingParts": [
+        "topPlate",
+        "coil"
+      ]
+    },
+    {
+      "id": "magnet",
+      "name": "磁石装置",
+      "size": [
+        1,
+        1.2,
+        0.8
+      ],
+      "ports": [
+        {
+          "id": "enable",
+          "type": "signal",
+          "position": [
+            -0.5,
+            0.3,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ]
+        }
+      ],
+      "params": {
+        "radius": 1.5,
+        "maxForceNewton": 20,
+        "mode": "attract"
+      },
+      "movingParts": [
+        "poleHead"
+      ]
+    },
+    {
+      "id": "rotator",
+      "name": "回転装置",
+      "size": [
+        1.2,
+        0.55,
+        1.2
+      ],
+      "ports": [
+        {
+          "id": "shaft_in",
+          "type": "shaft",
+          "position": [
+            -0.6,
+            0.25,
+            0
+          ],
+          "direction": [
+            -1,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "enable",
+          "type": "signal",
+          "position": [
+            0.6,
+            0.25,
+            0
+          ],
+          "direction": [
+            1,
+            0,
+            0
+          ]
+        }
+      ],
+      "params": {
+        "degreesPerSecond": 30
+      },
+      "movingParts": [
+        "turntable",
+        "driveShaft"
+      ]
+    }
+  ]
+}

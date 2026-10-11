@@ -1,0 +1,365 @@
+{
+  "schema": "bugworks.codex.v0.1",
+  "bugs": [
+    {
+      "id": "BUG-01",
+      "name": "グリッチキューブ",
+      "category": "接触",
+      "asset": "01_glitch_cube.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "4回目の衝突だけ反発方向を90度回す"
+    },
+    {
+      "id": "BUG-02",
+      "name": "リバース君",
+      "category": "運動",
+      "asset": "02_reverse.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "次の回転だけ入力と出力を逆転"
+    },
+    {
+      "id": "BUG-03",
+      "name": "無限ループ君",
+      "category": "循環",
+      "asset": "03_infinite_loop.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "4周目から周回損失を相殺する"
+    },
+    {
+      "id": "BUG-04",
+      "name": "増殖君",
+      "category": "複製",
+      "asset": "04_multiply.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "球を2個に複製"
+    },
+    {
+      "id": "BUG-05",
+      "name": "透明君",
+      "category": "透過",
+      "asset": "05_transparent.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "次の接触のみ衝突を無視"
+    },
+    {
+      "id": "BUG-06",
+      "name": "時間ずれ君",
+      "category": "時間",
+      "asset": "06_time_shift.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "片方の動作を1周期遅延再生"
+    },
+    {
+      "id": "BUG-07",
+      "name": "重力逆転君",
+      "category": "重力",
+      "asset": "07_gravity_reverse.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "局所空間の重力を逆転"
+    },
+    {
+      "id": "BUG-08",
+      "name": "見えない君",
+      "category": "表示",
+      "asset": "08_invisible.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "球の表示だけ消えるが物理は残る"
+    },
+    {
+      "id": "BUG-09",
+      "name": "グリッチ君",
+      "category": "信号",
+      "asset": "09_glitch.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "出力信号を1tickだけ二重送信"
+    },
+    {
+      "id": "BUG-10",
+      "name": "ワープ君",
+      "category": "空間",
+      "asset": "10_warp.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "球を対向リングへ転送"
+    },
+    {
+      "id": "BUG-11",
+      "name": "シールド君",
+      "category": "防御",
+      "asset": "11_shield.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "次の衝突を無効化"
+    },
+    {
+      "id": "BUG-12",
+      "name": "黒い液体",
+      "category": "材質",
+      "asset": "12_black_liquid.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "床摩擦を負値相当に変える"
+    },
+    {
+      "id": "BUG-13",
+      "name": "分解君",
+      "category": "構造",
+      "asset": "13_disassemble.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "歯車を部品状態へ分離"
+    },
+    {
+      "id": "BUG-14",
+      "name": "警告君",
+      "category": "信号",
+      "asset": "14_warning.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "警告信号を動力入力に変換"
+    },
+    {
+      "id": "BUG-15",
+      "name": "ランダム君",
+      "category": "確率",
+      "asset": "15_random.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "次回だけ分岐先を固定シードで変更"
+    },
+    {
+      "id": "BUG-16",
+      "name": "磁力狂い君",
+      "category": "磁力",
+      "asset": "16_magnetic.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "一定領域で同極が引き合う"
+    },
+    {
+      "id": "BUG-17",
+      "name": "分身君",
+      "category": "複製",
+      "asset": "17_split.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "球の影を実体化して1個増やす"
+    },
+    {
+      "id": "BUG-18",
+      "name": "劣化君",
+      "category": "材質",
+      "asset": "18_degrade.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "摩擦が段階的に下がる"
+    },
+    {
+      "id": "BUG-19",
+      "name": "上下逆君",
+      "category": "重力",
+      "asset": "19_upside_down.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "対象球の上下判定を逆にする"
+    },
+    {
+      "id": "BUG-20",
+      "name": "迷路君",
+      "category": "空間",
+      "asset": "20_maze.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "出口と入口の接続を入れ替える"
+    },
+    {
+      "id": "BUG-21",
+      "name": "スローモーション君",
+      "category": "時間",
+      "asset": "21_slow_motion.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "対象2球だけ時間倍率0.25"
+    },
+    {
+      "id": "BUG-22",
+      "name": "吸い込み君",
+      "category": "空間",
+      "asset": "22_suction.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "リング中心に向かう吸引場を生成"
+    },
+    {
+      "id": "BUG-23",
+      "name": "すり替え君",
+      "category": "位置",
+      "asset": "23_swap.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "2球の位置を交換"
+    },
+    {
+      "id": "BUG-24",
+      "name": "データ欠落君",
+      "category": "表示",
+      "asset": "24_data_loss.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "表示値だけ前回値で固定"
+    },
+    {
+      "id": "BUG-25",
+      "name": "すり抜け君",
+      "category": "接触",
+      "asset": "25_pass_through.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "次の1枚だけ貫通"
+    },
+    {
+      "id": "BUG-26",
+      "name": "金色君",
+      "category": "材質",
+      "asset": "26_gold.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "対象部品が金色になり伝達効率を上げる"
+    },
+    {
+      "id": "BUG-27",
+      "name": "画面バグ君",
+      "category": "表示",
+      "asset": "27_screen_bug.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "HUDが左右反転し隠し座標を表示"
+    },
+    {
+      "id": "BUG-28",
+      "name": "ノイズ君",
+      "category": "信号",
+      "asset": "28_noise.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "微弱な周期信号を発生"
+    },
+    {
+      "id": "BUG-29",
+      "name": "バグサイン",
+      "category": "信号",
+      "asset": "29_bug_sign.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "バグの発動範囲を可視化"
+    },
+    {
+      "id": "BUG-30",
+      "name": "監視君",
+      "category": "観測",
+      "asset": "30_monitor.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "観測対象の次の挙動を1回変更"
+    },
+    {
+      "id": "BUG-31",
+      "name": "認識ずれ君",
+      "category": "接続",
+      "asset": "31_recognition_shift.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "一度だけ端子型を読み替える"
+    },
+    {
+      "id": "BUG-32",
+      "name": "無限再生君",
+      "category": "復元",
+      "asset": "32_infinite_regeneration.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "次回から一定tick後に自動復元"
+    },
+    {
+      "id": "BUG-33",
+      "name": "視線君",
+      "category": "観測",
+      "asset": "33_gaze.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "目の向きで隠しポートを示す"
+    },
+    {
+      "id": "BUG-34",
+      "name": "閉じ込め君",
+      "category": "空間",
+      "asset": "34_enclosure.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "内部に一時的な反射増幅場を作る"
+    },
+    {
+      "id": "BUG-35",
+      "name": "ループ階段君",
+      "category": "空間",
+      "asset": "35_loop_stairs.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "上昇移動が始点へ戻る"
+    },
+    {
+      "id": "BUG-36",
+      "name": "空間崩壊君",
+      "category": "空間",
+      "asset": "36_space_collapse.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "出口を1つに折り畳む"
+    },
+    {
+      "id": "BUG-37",
+      "name": "時間停止君",
+      "category": "時間",
+      "asset": "37_time_stop.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "局所領域を30tick停止"
+    },
+    {
+      "id": "BUG-38",
+      "name": "人形君",
+      "category": "観測",
+      "asset": "38_humanoid.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "影の人形が装置を1回だけ押す"
+    },
+    {
+      "id": "BUG-39",
+      "name": "データ化君",
+      "category": "変換",
+      "asset": "39_data_conversion.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "球を信号に変え別端子で復元"
+    },
+    {
+      "id": "BUG-40",
+      "name": "ウイルス君",
+      "category": "感染",
+      "asset": "40_virus.png",
+      "discovered": false,
+      "description_locked": "？？？",
+      "description_unlocked": "隣接部品へ効果を1回だけ伝播"
+    }
+  ]
+}

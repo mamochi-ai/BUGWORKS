@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "0.1.0",
+  "name": "初期研究所（仮配置）",
+  "units": "m",
+  "elements": [
+    {
+      "id": "floor_-4_-4",
+      "moduleId": "floor_solid",
+      "position": [
+        -4,
+        -0.125,
+        -4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_-4_0",
+      "moduleId": "floor_solid",
+      "position": [
+        -4,
+        -0.125,
+        0
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_-4_4",
+      "moduleId": "floor_solid",
+      "position": [
+        -4,
+        -0.125,
+        4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_0_-4",
+      "moduleId": "floor_solid",
+      "position": [
+        0,
+        -0.125,
+        -4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_0_0",
+      "moduleId": "floor_solid",
+      "position": [
+        0,
+        -0.125,
+        0
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_0_4",
+      "moduleId": "floor_solid",
+      "position": [
+        0,
+        -0.125,
+        4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_4_-4",
+      "moduleId": "floor_solid",
+      "position": [
+        4,
+        -0.125,
+        -4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_4_0",
+      "moduleId": "floor_solid",
+      "position": [
+        4,
+        -0.125,
+        0
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "floor_4_4",
+      "moduleId": "floor_solid",
+      "position": [
+        4,
+        -0.125,
+        4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "wall_n_-4",
+      "moduleId": "wall_solid",
+      "position": [
+        -4,
+        1.75,
+        -6
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "wall_n_0",
+      "moduleId": "wall_window",
+      "position": [
+        0,
+        1.75,
+        -6
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "wall_n_4",
+      "moduleId": "wall_solid",
+      "position": [
+        4,
+        1.75,
+        -6
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "wall_w_-4",
+      "moduleId": "wall_solid",
+      "position": [
+        -6,
+        1.75,
+        -4
+      ],
+      "rotationYDeg": 90
+    },
+    {
+      "id": "wall_w_0",
+      "moduleId": "wall_solid",
+      "position": [
+        -6,
+        1.75,
+        0
+      ],
+      "rotationYDeg": 90
+    },
+    {
+      "id": "wall_w_4",
+      "moduleId": "wall_solid",
+      "position": [
+        -6,
+        1.75,
+        4
+      ],
+      "rotationYDeg": 90
+    },
+    {
+      "id": "upper_floor",
+      "moduleId": "floor_solid",
+      "position": [
+        4,
+        3.375,
+        -4
+      ],
+      "rotationYDeg": 0
+    },
+    {
+      "id": "stair_access",
+      "moduleId": "stairs_4m",
+      "position": [
+        4,
+        1.75,
+        1
+      ],
+      "rotationYDeg": 0
+    }
+  ],
+  "warnings": [
+    "This is a spatial demonstration, not a collision-tested complete building.",
+    "Stairs and upper floor may need repositioning and run adjustment; ensure safe landing and clearance.",
+    "No roof included initially so camera can see inside."
+  ]
+}

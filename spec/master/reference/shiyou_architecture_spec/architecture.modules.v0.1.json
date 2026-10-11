@@ -1,0 +1,638 @@
+{
+  "schemaVersion": "0.1.0",
+  "coordinateSystem": {
+    "unit": "meter",
+    "up": "+Y",
+    "forward": "+Z",
+    "rotation": "quaternion_xyzw"
+  },
+  "grid": {
+    "horizontalM": 0.25,
+    "moduleM": 4,
+    "rotationSnapDegrees": 90,
+    "placementToleranceM": 0.02
+  },
+  "floors": {
+    "groundSurfaceY": 0,
+    "floorThicknessM": 0.25,
+    "floorCenterY": -0.125,
+    "upperSurfaceY": 3.5,
+    "upperFloorCenterY": 3.375,
+    "clearanceM": 3.25
+  },
+  "modules": [
+    {
+      "id": "floor_solid",
+      "nameJa": "床・通常",
+      "category": "floor",
+      "sizeM": [
+        4,
+        0.25,
+        4
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "floor_edge_0",
+          "positionM": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "id": "floor_edge_1",
+          "positionM": [
+            0,
+            0,
+            -2
+          ]
+        },
+        {
+          "id": "floor_edge_2",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "floor_edge_3",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "floor_hazard",
+      "nameJa": "床・注意表示",
+      "category": "floor",
+      "sizeM": [
+        4,
+        0.25,
+        4
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "floor_edge_0",
+          "positionM": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "id": "floor_edge_1",
+          "positionM": [
+            0,
+            0,
+            -2
+          ]
+        },
+        {
+          "id": "floor_edge_2",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "floor_edge_3",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "floor_grate",
+      "nameJa": "床・グレーチング",
+      "category": "floor",
+      "sizeM": [
+        4,
+        0.25,
+        4
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "floor_edge_0",
+          "positionM": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "id": "floor_edge_1",
+          "positionM": [
+            0,
+            0,
+            -2
+          ]
+        },
+        {
+          "id": "floor_edge_2",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "floor_edge_3",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "floor_glass",
+      "nameJa": "床・ガラス",
+      "category": "floor",
+      "sizeM": [
+        4,
+        0.25,
+        4
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "floor_edge_0",
+          "positionM": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "id": "floor_edge_1",
+          "positionM": [
+            0,
+            0,
+            -2
+          ]
+        },
+        {
+          "id": "floor_edge_2",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "floor_edge_3",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "wall_solid",
+      "nameJa": "壁・通常",
+      "category": "wall",
+      "sizeM": [
+        4,
+        3.5,
+        0.2
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "wall_left",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_right",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_top",
+          "positionM": [
+            0,
+            1.75,
+            0
+          ]
+        },
+        {
+          "id": "wall_bottom",
+          "positionM": [
+            0,
+            -1.75,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "wall_window",
+      "nameJa": "壁・窓",
+      "category": "wall",
+      "sizeM": [
+        4,
+        3.5,
+        0.2
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "wall_left",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_right",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_top",
+          "positionM": [
+            0,
+            1.75,
+            0
+          ]
+        },
+        {
+          "id": "wall_bottom",
+          "positionM": [
+            0,
+            -1.75,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "wall_door",
+      "nameJa": "壁・扉",
+      "category": "wall",
+      "sizeM": [
+        4,
+        3.5,
+        0.2
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "wall_left",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_right",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_top",
+          "positionM": [
+            0,
+            1.75,
+            0
+          ]
+        },
+        {
+          "id": "wall_bottom",
+          "positionM": [
+            0,
+            -1.75,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "wall_shutter",
+      "nameJa": "壁・シャッター",
+      "category": "wall",
+      "sizeM": [
+        4,
+        3.5,
+        0.2
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "wall_left",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_right",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "wall_top",
+          "positionM": [
+            0,
+            1.75,
+            0
+          ]
+        },
+        {
+          "id": "wall_bottom",
+          "positionM": [
+            0,
+            -1.75,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "column",
+      "nameJa": "柱",
+      "category": "structural",
+      "sizeM": [
+        0.4,
+        3.5,
+        0.4
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "column_top",
+          "positionM": [
+            0,
+            1.75,
+            0
+          ]
+        },
+        {
+          "id": "column_bottom",
+          "positionM": [
+            0,
+            -1.75,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "beam",
+      "nameJa": "梁",
+      "category": "structural",
+      "sizeM": [
+        4,
+        0.4,
+        0.4
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "beam_start",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "beam_end",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "stairs_4m",
+      "nameJa": "階段（高さ3.5m）",
+      "category": "circulation",
+      "sizeM": [
+        4,
+        3.5,
+        6
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "stairs_bottom",
+          "positionM": [
+            0,
+            -1.75,
+            -3
+          ]
+        },
+        {
+          "id": "stairs_top",
+          "positionM": [
+            0,
+            1.75,
+            3
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "catwalk",
+      "nameJa": "2階通路",
+      "category": "floor",
+      "sizeM": [
+        4,
+        0.25,
+        2
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "walk_start",
+          "positionM": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "walk_end",
+          "positionM": [
+            0,
+            0,
+            1
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "railing",
+      "nameJa": "手すり",
+      "category": "safety",
+      "sizeM": [
+        4,
+        1.1,
+        0.12
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "rail_start",
+          "positionM": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "id": "rail_end",
+          "positionM": [
+            2,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "door_single",
+      "nameJa": "独立ドア",
+      "category": "opening",
+      "sizeM": [
+        1.2,
+        2.4,
+        0.15
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "door_hinge",
+          "positionM": [
+            -0.6,
+            0,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "pipe_straight",
+      "nameJa": "配管",
+      "category": "utility",
+      "sizeM": [
+        2,
+        0.15,
+        0.15
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "pipe_in",
+          "positionM": [
+            0,
+            0,
+            -1
+          ]
+        },
+        {
+          "id": "pipe_out",
+          "positionM": [
+            0,
+            0,
+            1
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    },
+    {
+      "id": "lamp_ceiling",
+      "nameJa": "天井照明",
+      "category": "decor",
+      "sizeM": [
+        1,
+        0.15,
+        0.35
+      ],
+      "origin": "bounding_box_center",
+      "collision": "simplified_mesh_or_boxes",
+      "ports": [
+        {
+          "id": "ceiling_mount",
+          "positionM": [
+            0,
+            0.075,
+            0
+          ]
+        }
+      ],
+      "referenceImageOnly": true
+    }
+  ],
+  "notes": [
+    "port positions are relative to module bounding-box center; placement pivot may be overridden in renderer",
+    "dimensions are initial gameplay design values, not measured from reference images",
+    "stairs geometry must be authored to connect y=0 and y=3.5 with sufficient run; 6m is preliminary"
+  ]
+}

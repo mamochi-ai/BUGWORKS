@@ -1,0 +1,371 @@
+{
+  "schemaVersion": "0.1-draft",
+  "coordinateSystem": "Y-up, meters, right-handed",
+  "units": "meters",
+  "gridSize": 1,
+  "physicsHz": 120,
+  "important": "Draft positions for implementation blockout. Check alignment and ball trajectories in engine; not validated.",
+  "stages": [
+    {
+      "id": "1-1",
+      "name": "はじめの一歩",
+      "objective": "球をゴールに届ける",
+      "parts": [
+        {
+          "id": "launcher",
+          "type": "ball_launcher",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "goal",
+          "type": "goal_sensor",
+          "position": [
+            8,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_a",
+          "type": "straight_rail",
+          "position": [
+            2,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_b",
+          "type": "straight_rail",
+          "position": [
+            5,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        }
+      ],
+      "requiredEvents": [
+        "ball_enter_goal"
+      ],
+      "tutorial": [
+        "camera_orbit",
+        "select_part",
+        "place_part",
+        "start_simulation"
+      ],
+      "bugHint": "S-404が一瞬だけ不審な反応を見せる。発動条件は明示しない。"
+    },
+    {
+      "id": "1-2",
+      "name": "バネでジャンプ",
+      "objective": "バネで段差を越えて球をゴールへ",
+      "parts": [
+        {
+          "id": "launcher",
+          "type": "ball_launcher",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_a",
+          "type": "straight_rail",
+          "position": [
+            2,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "spring",
+          "type": "spring_pad",
+          "position": [
+            4,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "platform",
+          "type": "raised_platform",
+          "position": [
+            6,
+            1,
+            0
+          ],
+          "rotationYDegrees": 0,
+          "height": 1
+        },
+        {
+          "id": "goal",
+          "type": "goal_sensor",
+          "position": [
+            8,
+            1,
+            0
+          ],
+          "rotationYDegrees": 0
+        }
+      ],
+      "requiredEvents": [
+        "spring_triggered",
+        "ball_enter_goal"
+      ],
+      "tutorial": [
+        "spring_placement",
+        "height_adjustment"
+      ]
+    },
+    {
+      "id": "1-3",
+      "name": "曲がって運ぶ",
+      "objective": "カーブレールを使ってゴールへ",
+      "parts": [
+        {
+          "id": "launcher",
+          "type": "ball_launcher",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_a",
+          "type": "straight_rail",
+          "position": [
+            2,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "curve_a",
+          "type": "curved_rail",
+          "position": [
+            4,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_b",
+          "type": "straight_rail",
+          "position": [
+            5,
+            0,
+            2
+          ],
+          "rotationYDegrees": 90
+        },
+        {
+          "id": "curve_b",
+          "type": "curved_rail",
+          "position": [
+            5,
+            0,
+            4
+          ],
+          "rotationYDegrees": 90
+        },
+        {
+          "id": "goal",
+          "type": "goal_sensor",
+          "position": [
+            7,
+            0,
+            5
+          ],
+          "rotationYDegrees": 0
+        }
+      ],
+      "requiredEvents": [
+        "ball_enter_goal"
+      ],
+      "tutorial": [
+        "rotate_part",
+        "snap_connectors"
+      ]
+    },
+    {
+      "id": "1-4",
+      "name": "歯車で動かす",
+      "objective": "球が通過することで歯車が回り可動橋が接続される",
+      "parts": [
+        {
+          "id": "launcher",
+          "type": "ball_launcher",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_a",
+          "type": "straight_rail",
+          "position": [
+            2,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "trigger",
+          "type": "weight_trigger",
+          "position": [
+            3,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "gear_small",
+          "type": "gear",
+          "position": [
+            4,
+            0,
+            1
+          ],
+          "rotationYDegrees": 0,
+          "teeth": 12
+        },
+        {
+          "id": "gear_large",
+          "type": "gear",
+          "position": [
+            5,
+            0,
+            1
+          ],
+          "rotationYDegrees": 0,
+          "teeth": 24
+        },
+        {
+          "id": "bridge",
+          "type": "movable_bridge",
+          "position": [
+            6,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "goal",
+          "type": "goal_sensor",
+          "position": [
+            9,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        }
+      ],
+      "requiredEvents": [
+        "weight_trigger_activated",
+        "bridge_connected",
+        "ball_enter_goal"
+      ],
+      "tutorial": [
+        "gear_coupling",
+        "mechanical_trigger"
+      ]
+    },
+    {
+      "id": "1-5",
+      "name": "設計図を保存",
+      "objective": "球をゴールへ届けた後、設計図をローカル保存",
+      "parts": [
+        {
+          "id": "launcher",
+          "type": "ball_launcher",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "rail_a",
+          "type": "straight_rail",
+          "position": [
+            2,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "spring",
+          "type": "spring_pad",
+          "position": [
+            4,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "curve",
+          "type": "curved_rail",
+          "position": [
+            6,
+            0,
+            0
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "gear",
+          "type": "gear",
+          "position": [
+            7,
+            0,
+            1
+          ],
+          "rotationYDegrees": 0
+        },
+        {
+          "id": "goal",
+          "type": "goal_sensor",
+          "position": [
+            9,
+            0,
+            2
+          ],
+          "rotationYDegrees": 0
+        }
+      ],
+      "requiredEvents": [
+        "ball_enter_goal",
+        "blueprint_saved_locally"
+      ],
+      "tutorial": [
+        "open_save_dialog",
+        "enter_blueprint_name",
+        "save_local_json"
+      ]
+    }
+  ]
+}
