@@ -77,3 +77,31 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .controls button:active { transform: none; }
 }
+
+/* 装置パレット・編集パネル */
+.edit {
+  position: absolute; left: max(12px, env(safe-area-inset-left)); top: calc(max(12px, env(safe-area-inset-top)) + 64px);
+  width: 216px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px;
+}
+.edit h2 { margin: 0; font-size: 13px; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+.edit .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.edit button {
+  min-height: 48px; padding: 4px 8px; border-radius: 10px; border: 1px solid var(--line);
+  background: #262b32; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; touch-action: manipulation;
+}
+.edit button i { font-style: normal; font-size: 17px; }
+.edit button:disabled { opacity: 0.38; cursor: default; }
+.edit button:not(:disabled):active { background: #30363e; }
+.edit button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.edit button.add { border-color: var(--orange); color: var(--orange); }
+.edit .sel { font-size: 12.5px; color: var(--muted); line-height: 1.45; min-height: 2.9em; }
+.edit .msg { margin: 0; font-size: 12.5px; line-height: 1.45; min-height: 2.9em; }
+.edit .msg[data-kind='error'] { color: #ff8a7a; }
+.edit .msg[data-kind='info'] { color: var(--cyan); }
+
+@media (max-width: 700px) {
+  .edit { width: 168px; top: calc(max(12px, env(safe-area-inset-top)) + 56px); }
+  .edit .row button span { display: none; }
+}

@@ -3,7 +3,7 @@ import type { BallState, Simulation } from '../sim/Simulation';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
-import { RailModelFactory } from './RailModel';
+import { RailLayer } from './RailLayer';
 
 /**
  * 物理状態を読むだけの描画層。物理ワールドへは書き込まない。
@@ -12,6 +12,8 @@ import { RailModelFactory } from './RailModel';
 export class LabView {
   readonly scene = new THREE.Scene();
   readonly renderer: THREE.WebGLRenderer;
+  /** レール（編集に追従して作り直す） */
+  readonly rails = new RailLayer();
   private ball: THREE.Mesh;
   private tmpQa = new THREE.Quaternion();
   private tmpQb = new THREE.Quaternion();
@@ -23,7 +25,7 @@ export class LabView {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.scene.background = new THREE.Color(PALETTE.background);
@@ -35,7 +37,7 @@ export class LabView {
     pmrem.dispose();
     this.addLights();
     this.addLab();
-    this.addRails();
+    this.scene.add(this.rails.root);
     this.ball = this.makeBall();
     this.scene.add(this.ball);
   }
@@ -117,22 +119,6 @@ export class LabView {
     );
     strip.position.y = size[1] * 0.15;
     wall.add(strip);
-  }
-
-  private addRails(): void {
-    const factory = new RailModelFactory();
-    const supports = new Set<string>();
-    for (const track of this.sim.tracks) {
-      this.scene.add(factory.createRail(track));
-      // 継ぎ目のポートは隣のレールと共有なので支柱は1本だけ
-      for (const port of [track.start, track.end]) {
-        const key = port.map((v) => v.toFixed(3)).join(',');
-        if (supports.has(key)) continue;
-        supports.add(key);
-        const support = factory.createSupport(port);
-        if (support) this.scene.add(support);
-      }
-    }
   }
 
   private makeBall(): THREE.Mesh {

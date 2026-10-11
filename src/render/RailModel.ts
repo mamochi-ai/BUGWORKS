@@ -13,6 +13,7 @@ import { railVisualProfile } from './railVisualProfile';
  */
 export class RailModelFactory {
   private readonly profile = railVisualProfile();
+  private readonly pickMaterial = new THREE.MeshBasicMaterial({ visible: false });
   private readonly mats: Record<'steel' | 'paint' | 'dark' | 'bolt' | 'bearing', THREE.MeshStandardMaterial>;
   private readonly geo: {
     cheek: THREE.BufferGeometry;
@@ -64,6 +65,7 @@ export class RailModelFactory {
     group.quaternion.set(q.x, q.y, q.z, q.w);
 
     const tube = new THREE.CylinderGeometry(1, 1, track.length, 16).rotateX(Math.PI / 2);
+    tube.userData.ownedByRail = true; // レール削除時に破棄する（他は共有ジオメトリ）
     for (const side of [-1, 1]) {
       group.add(this.mesh(tube, this.mats.steel, [side * p.carrier.x, p.carrier.y, 0], p.carrier.radius));
       group.add(this.mesh(tube, this.mats.steel, [side * p.guard.x, p.guard.y, 0], p.guard.radius));
@@ -71,6 +73,12 @@ export class RailModelFactory {
     for (const end of [-1, 1]) {
       group.add(this.createCollar(end * (track.length / 2 - p.collar.length / 2)));
     }
+    // タッチ用の当たり判定（描画しない）。鋼管の隙間を指が素通りしないよう、外形より少し大きい箱
+    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, track.length), this.pickMaterial);
+    pick.geometry.userData.ownedByRail = true;
+    pick.position.y = 0.07;
+    pick.name = 'pick_proxy';
+    group.add(pick);
     return group;
   }
 
