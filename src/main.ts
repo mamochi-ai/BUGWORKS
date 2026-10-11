@@ -9,6 +9,8 @@ import { Simulation } from './sim/Simulation';
 import { SimulationController } from './sim/SimulationController';
 import { EditPanel } from './ui/EditPanel';
 import { Hud } from './ui/Hud';
+import { StageController } from './stage/StageController';
+import { StageUi } from './ui/StageUi';
 
 async function boot(): Promise<void> {
   const viewport = document.getElementById('viewport')!;
@@ -23,6 +25,13 @@ async function boot(): Promise<void> {
   const rig = new CameraRig(view.canvas);
   const hud = new Hud(hudRoot, ctl, () => rig.home());
   new EditPanel(hudRoot, { editor, ctl, addPosition: () => ({ x: rig.controls.target.x, z: rig.controls.target.z }) });
+  const stage = new StageController(editor, ctl, sim, VERTICAL_SLICE_LAYOUT);
+  new StageUi(hudRoot, stage, ctl);
+  stage.onChange((c) => {
+    if (c !== 'stage') return;
+    hud.goalBanner = stage.current === null;
+    rig.home();
+  });
 
   // 配置が変わったら物理を作り直し、描画を追従させる
   const syncRails = () => view.devices.sync(editor.devices, editor.connections(), editor.selectedId);
@@ -81,6 +90,7 @@ async function boot(): Promise<void> {
     if (ctl.state === 'running') alpha = fr.alpha;
     else alpha = 1;
 
+    stage.update();
     rig.update(Math.min(realDt, 0.1));
     view.render(rig.camera, alpha);
 
@@ -104,7 +114,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(loop);
 
   // 開発時の手動確認・E2E用フック（ゲームロジックは公開しない）
-  (window as unknown as { __bugworks?: unknown }).__bugworks = { ctl, sim, rig, editor, view };
+  (window as unknown as { __bugworks?: unknown }).__bugworks = { ctl, sim, rig, editor, view, stage };
 }
 
 boot().catch((err) => {

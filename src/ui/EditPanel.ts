@@ -46,7 +46,7 @@ export class EditPanel {
     panel.innerHTML = `
       <h2>装置</h2>
       <div class="palette">
-        ${PALETTE_TYPES.map((t) => `<button type="button" data-e="add-${t}" class="add" title="${getDeviceDef(t).name}を追加"><i>＋</i><span>${PALETTE_LABELS[t]}</span></button>`).join('')}
+        ${PALETTE_TYPES.map((t) => `<button type="button" data-e="add-${t}" class="add" title="${getDeviceDef(t).name}を追加"><i>＋</i><span>${PALETTE_LABELS[t]}</span><small data-k="left-${t}"></small></button>`).join('')}
       </div>
       <div class="sel" data-k="sel"></div>
       <div class="row">
@@ -63,10 +63,12 @@ export class EditPanel {
         <button type="button" data-e="redo" aria-label="やり直す"><i>↷</i><span>やり直し</span></button>
       </div>
       <p class="msg" data-k="msg" role="status" aria-live="polite"></p>
-      <h2>サンプル</h2>
-      <div class="row">
-        <button type="button" data-e="sample-spring">バネでゴール</button>
-        <button type="button" data-e="sample-gear">歯車で可動橋</button>
+      <div class="samples" data-k="samples">
+        <h2>サンプル</h2>
+        <div class="row">
+          <button type="button" data-e="sample-spring">バネでゴール</button>
+          <button type="button" data-e="sample-gear">歯車で可動橋</button>
+        </div>
       </div>
     `;
     root.appendChild(panel);
@@ -165,6 +167,10 @@ export class EditPanel {
       box.innerHTML = '';
       return;
     }
+    if (this.deps.editor.isLocked(sel.id)) {
+      box.innerHTML = '<h3>設定</h3>' + specs.map((spec) => `<div class="param-row"><span class="param-label">${spec.label}</span><output>${formatParam(spec, paramValue(sel, spec.key))}</output><small>🔒 固定</small></div>`).join('');
+      return;
+    }
     const connected = sel.type === 'launcher' && planLauncher(sel, this.deps.editor.devices).feedsRailId !== null;
     box.innerHTML =
       '<h3>設定</h3>' +
@@ -188,10 +194,22 @@ export class EditPanel {
   private sync(): void {
     const { editor } = this.deps;
     const sel = editor.selected;
+    const locked = sel ? editor.isLocked(sel.id) : false;
     this.el.sel.textContent = sel
-      ? `選択中：${getDeviceDef(sel.type).name} ${sel.id}（高さ ${sel.position[1].toFixed(1)}m・${sel.rotationYDeg}°）`
+      ? `選択中：${getDeviceDef(sel.type).name} ${sel.id}（高さ ${sel.position[1].toFixed(1)}m・${sel.rotationYDeg}°）${locked ? '　🔒固定：ステージの装置なので動かせません' : ''}`
       : '部品をタップすると選択できます';
-    for (const k of ['rotate', 'delete', 'up', 'down']) (this.el[k] as HTMLButtonElement).disabled = !sel;
+    for (const k of ['rotate', 'delete', 'up', 'down']) (this.el[k] as HTMLButtonElement).disabled = !sel || locked;
+    // ステージ中は置ける装置だけを、残りの数と一緒に出す
+    const allowed = editor.inventoryTypes;
+    for (const t of PALETTE_TYPES) {
+      const b = this.el[`add-${t}`] as HTMLButtonElement;
+      const left = editor.remaining(t);
+      b.hidden = allowed !== null && !allowed.includes(t);
+      b.disabled = left <= 0;
+      this.el[`left-${t}`].textContent = allowed ? `残り${Math.max(0, left)}` : '';
+      b.setAttribute('aria-label', `${getDeviceDef(t).name}を追加${allowed ? `（残り${Math.max(0, left)}個）` : ''}`);
+    }
+    this.el.samples.hidden = editor.inStage;
     // 台の上（または床）に乗る装置は高さを手で変えない
     if (sel && restsOnSurface(sel.type)) for (const k of ['up', 'down']) (this.el[k] as HTMLButtonElement).disabled = true;
     this.renderParams();
