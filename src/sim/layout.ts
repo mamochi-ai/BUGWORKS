@@ -19,21 +19,22 @@ export interface PlacedDevice {
 export interface SliceLayout {
   seed: number;
   devices: PlacedDevice[];
-  /** 鉄球の初期配置：どのレールの ball_in に置くか */
-  ballStart: { deviceId: string; portId: 'ball_in'; offsetAlongTrack: number };
 }
+
+/** 鉄球を置く位置：開始レールの入口から走行方向へこの距離（m） */
+export const BALL_START_OFFSET = 0.15;
 
 /**
  * 3本のレールを ball_out → ball_in で連結した下り坂。
  * レール既定値: ball_in y=0.35 / ball_out y=0.15 / 長さ2m（devices.v0.1.json）。
  * 各レールを 0.2m ずつ下げて前のレールの出口と次の入口を一致させる。
+ * 北の壁との間に1本分の空きを残し、先頭の手前にもレールを足せるようにしている。
  */
 export const VERTICAL_SLICE_LAYOUT: SliceLayout = {
   seed: 404,
   devices: [
-    { id: 'rail_1', type: 'rail', position: [0, 0.4, -3], rotationYDeg: 0 },
-    { id: 'rail_2', type: 'rail', position: [0, 0.2, -1], rotationYDeg: 0 },
-    { id: 'rail_3', type: 'rail', position: [0, 0.0, 1], rotationYDeg: 0 },
+    { id: 'rail_1', type: 'rail', position: [0, 0.4, -2], rotationYDeg: 0 },
+    { id: 'rail_2', type: 'rail', position: [0, 0.2, 0], rotationYDeg: 0 },
+    { id: 'rail_3', type: 'rail', position: [0, 0.0, 2], rotationYDeg: 0 },
   ],
-  ballStart: { deviceId: 'rail_1', portId: 'ball_in', offsetAlongTrack: 0.15 },
 };

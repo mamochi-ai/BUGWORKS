@@ -1,4 +1,5 @@
 import { FixedStepClock } from './FixedStepClock';
+import type { SliceLayout } from './layout';
 import type { Simulation } from './Simulation';
 
 export type RunState = 'ready' | 'running' | 'paused';
@@ -63,6 +64,18 @@ export class SimulationController {
     this.sim.reset();
     this.clock.reset();
     this.setState('ready');
+  }
+
+  /** 配置を編集したとき：新しい配置で初期状態に戻す */
+  applyLayout(layout: SliceLayout): void {
+    this.sim.setLayout(layout);
+    this.clock.reset();
+    this.setState('ready');
+  }
+
+  /** 編集できるのは初期状態のときだけ。実行中/一時停止中ならリセットしてから編集させる */
+  ensureEditable(): void {
+    if (this._state !== 'ready') this.reset();
   }
 
   setSpeed(speed: number): void {

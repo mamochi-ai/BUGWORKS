@@ -2,7 +2,8 @@ import type { Rapier } from './rapier';
 import type { Vec3 } from './catalog';
 import { GRAVITY, PHYSICS_DT } from './constants';
 import { buildLabBoxes, type LabBox } from './lab';
-import type { SliceLayout } from './layout';
+import { chooseBallStart } from '../edit/placement';
+import { BALL_START_OFFSET, type SliceLayout } from './layout';
 import { BALL_RADIUS, RAIL_PROFILE, ballRestPosition, buildRailTrack, type RailTrack } from './railGeometry';
 
 type World = InstanceType<Rapier['World']>;
@@ -42,7 +43,7 @@ const MATERIAL = {
  * リセットは「ワールドを破棄して同じレイアウトから作り直す」ことで初期状態を完全再現する。
  */
 export class Simulation {
-  readonly tracks: RailTrack[];
+  private _tracks: RailTrack[] = [];
   readonly labBoxes: LabBox[];
   private world!: World;
   private ball!: RigidBody;
@@ -52,11 +53,31 @@ export class Simulation {
 
   constructor(
     private readonly R: Rapier,
-    readonly layout: SliceLayout,
+    private _layout: SliceLayout,
   ) {
-    this.tracks = layout.devices.filter((d) => d.type === 'rail').map(buildRailTrack);
     this.labBoxes = buildLabBoxes();
+    this.applyTracks();
     this.build();
+  }
+
+  get layout(): SliceLayout {
+    return this._layout;
+  }
+
+  get tracks(): readonly RailTrack[] {
+    return this._tracks;
+  }
+
+  /** 配置を差し替えて初期状態から作り直す（編集後に呼ぶ） */
+  setLayout(layout: SliceLayout): void {
+    this._layout = layout;
+    this.applyTracks();
+    this.world.free();
+    this.build();
+  }
+
+  private applyTracks(): void {
+    this._tracks = this._layout.devices.filter((d) => d.type === 'rail').map(buildRailTrack);
   }
 
   get tick(): number {
@@ -139,9 +160,10 @@ export class Simulation {
 
     for (const track of this.tracks) this.addRailColliders(track);
 
-    const start = this.tracks.find((t) => t.deviceId === this.layout.ballStart.deviceId);
-    if (!start) throw new Error(`鉄球の開始レールが見つかりません: ${this.layout.ballStart.deviceId}`);
-    const p = ballRestPosition(start, this.layout.ballStart.offsetAlongTrack);
+    // 発射機ができるまでの暫定：つながっていない入口のうち最も高いレールに置く（DECISIONS.md D-16）
+    const startId = chooseBallStart(this._layout.devices);
+    const start = this._tracks.find((t) => t.deviceId === startId);
+    const p: Vec3 = start ? ballRestPosition(start, BALL_START_OFFSET) : [0, BALL_RADIUS, 0];
     this.ball = world.createRigidBody(
       R.RigidBodyDesc.dynamic()
         .setTranslation(...p)

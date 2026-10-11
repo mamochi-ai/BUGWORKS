@@ -1,9 +1,13 @@
+import * as THREE from 'three';
+import { EditorModel } from './edit/EditorModel';
 import { CameraRig } from './input/CameraRig';
+import { PartDragController } from './input/PartDragController';
 import { LabView } from './render/LabView';
 import { VERTICAL_SLICE_LAYOUT } from './sim/layout';
 import { loadRapier } from './sim/rapier';
 import { Simulation } from './sim/Simulation';
 import { SimulationController } from './sim/SimulationController';
+import { EditPanel } from './ui/EditPanel';
 import { Hud } from './ui/Hud';
 
 async function boot(): Promise<void> {
@@ -12,11 +16,49 @@ async function boot(): Promise<void> {
   hudRoot.innerHTML = '<div class="boot">物理エンジンを初期化中…</div>';
 
   const R = await loadRapier();
-  const sim = new Simulation(R, VERTICAL_SLICE_LAYOUT);
+  const editor = new EditorModel(VERTICAL_SLICE_LAYOUT.devices, VERTICAL_SLICE_LAYOUT.seed);
+  const sim = new Simulation(R, editor.layout);
   const ctl = new SimulationController(sim);
   const view = new LabView(viewport, sim);
   const rig = new CameraRig(view.canvas);
   const hud = new Hud(hudRoot, ctl, () => rig.home());
+  new EditPanel(hudRoot, { editor, ctl, addPosition: () => ({ x: rig.controls.target.x, z: rig.controls.target.z }) });
+
+  // 配置が変わったら物理を作り直し、描画を追従させる
+  const syncRails = () => view.rails.sync(editor.devices, editor.connections(), editor.selectedId);
+  editor.onChange((kind) => {
+    if (kind === 'layout') {
+      ctl.applyLayout(editor.layout);
+      syncRails();
+    } else if (kind === 'selection') {
+      view.rails.setSelected(editor.selectedId);
+    }
+  });
+  ctl.onChange(() => view.rails.setEditMode(ctl.state === 'ready'));
+  syncRails();
+  view.rails.setEditMode(true);
+
+  // 部品に触れたら部品操作、何もない所ならカメラ操作
+  new PartDragController(viewport, view.canvas, rig.camera, rig.controls, () => view.rails.pickables, {
+    onPick: (id) => {
+      ctl.ensureEditable();
+      editor.select(id);
+    },
+    onTapEmpty: () => editor.select(null),
+    positionOf: (id) => {
+      const d = editor.devices.find((x) => x.id === id);
+      return d ? new THREE.Vector3(...d.position) : null;
+    },
+    onDrag: (id, x, z) => {
+      const ev = editor.previewMove(id, x, z);
+      if (ev) view.rails.preview(ev.device, ev.ok, ev.snap?.other ?? null);
+    },
+    onDrop: (id, x, z) => {
+      const ev = editor.previewMove(id, x, z);
+      if (!ev || !editor.commitMove(id, ev)) syncRails(); // 置けなければ元の位置に戻す
+    },
+    onCancel: () => syncRails(),
+  });
 
   const resize = () => view.resize(viewport.clientWidth, viewport.clientHeight, rig.camera);
   window.addEventListener('resize', resize);
@@ -62,7 +104,7 @@ async function boot(): Promise<void> {
   requestAnimationFrame(loop);
 
   // 開発時の手動確認・E2E用フック（ゲームロジックは公開しない）
-  (window as unknown as { __bugworks?: unknown }).__bugworks = { ctl, sim, rig };
+  (window as unknown as { __bugworks?: unknown }).__bugworks = { ctl, sim, rig, editor, view };
 }
 
 boot().catch((err) => {
