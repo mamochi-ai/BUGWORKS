@@ -1,4 +1,5 @@
 import type { DeviceType, PlacedDevice, SliceLayout } from '../sim/layout';
+import { findSpec, formatParam, normalizeParam, paramValue } from './params';
 import {
   PLACEMENT,
   PROBLEM_TEXT,
@@ -136,11 +137,22 @@ export class EditorModel {
     );
   }
 
-  /** 装置のパラメータを変える（元に戻せる） */
-  setParam(id: string, key: string, value: number, label: string): boolean {
+  /** 装置の設定を変える（範囲・刻みに合わせてから保存。元に戻せる） */
+  setParam(id: string, key: string, value: number): boolean {
     const d = this.find(id);
     if (!d) return false;
-    return this.tryReplace({ ...d, params: { ...(d.params ?? {}), [key]: value } }, `${id} の${label}を ${value} にしました`, '変更できません');
+    const spec = findSpec(d.type, key);
+    if (!spec) {
+      this.fail(`${id} には「${key}」の設定はありません`);
+      return false;
+    }
+    const v = normalizeParam(spec, value);
+    if (paramValue(d, key) === v) return false;
+    return this.tryReplace(
+      { ...d, params: { ...(d.params ?? {}), [key]: v } },
+      `${id} の${spec.label}を ${formatParam(spec, v)} にしました`,
+      '変更できません',
+    );
   }
 
   remove(id: string): boolean {

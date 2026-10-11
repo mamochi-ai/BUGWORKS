@@ -2,7 +2,7 @@ import type { Rapier } from './rapier';
 import type { Vec3 } from './catalog';
 import { GRAVITY, PHYSICS_DT } from './constants';
 import { buildLabBoxes, type LabBox } from './lab';
-import { LAUNCHER_SHAPE, MAX_BALLS, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
+import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
 import type { SliceLayout } from './layout';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
@@ -303,7 +303,7 @@ export class Simulation {
       loaded !== undefined &&
       (() => {
         const p = loaded.body.translation();
-        return Math.hypot(p.x - l.loadPoint[0], p.y - l.loadPoint[1], p.z - l.loadPoint[2]) < 0.03;
+        return Math.hypot(p.x - l.loadPoint[0], p.y - l.loadPoint[1], p.z - l.loadPoint[2]) < 0.035 && Math.hypot(...readBody(loaded.body).linvel) < 0.2;
       })();
     if (!loaded || !settled) {
       l.waiting = !loaded && this.balls.length >= MAX_BALLS ? 'max_balls' : 'loading';
@@ -416,20 +416,21 @@ export class Simulation {
       );
       const [sx, sy, sz] = S.base.size;
       world.createCollider(R.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2).setFriction(MATERIAL.floorFriction), base);
-      // 溝（レールと同じ断面）＋後ろ壁
-      const len = S.frontZ - S.backZ;
+      // 溝（レールと同じ断面）＋球の止め（押し板を縮めた位置）。後端を軸に plan.angle だけ上へ傾く
+      const plan = planLauncher(d, this._layout.devices);
+      const len = CHUTE_LENGTH;
       const chute = world.createRigidBody(
         R.RigidBodyDesc.fixed()
-          .setTranslation(...launcherToWorld(d, [0, S.surfaceY, (S.frontZ + S.backZ) / 2]))
-          .setRotation(quatFromYawPitch(yaw, 0)),
+          .setTranslation(...launcherToWorld(d, chuteLocal(plan.angle, len / 2, 0)))
+          .setRotation(quatFromYawPitch(yaw, -plan.angle)),
       );
       railParts(len).forEach((part, i) => world.createCollider(this.trackPartDesc(part, i === 0), chute));
       const halfW = RAIL_PROFILE.innerWidth / 2 + RAIL_PROFILE.wallThickness;
-      world.createCollider(R.ColliderDesc.cuboid(halfW, 0.08, 0.02).setTranslation(0, 0.04, -len / 2 - 0.02), chute);
+      world.createCollider(R.ColliderDesc.cuboid(halfW, 0.08, 0.02).setTranslation(0, 0.04, -len / 2 + CHUTE_STOP_D - 0.02), chute);
 
       // 最初の球は装填済み（初期状態で溝の上に見える）。最初の発射は再生した瞬間（tick 0）
       const runtime = {
-        ...planLauncher(d, this._layout.devices),
+        ...plan,
         nextFireTick: 0,
         lastFireTick: null,
         loadedBallId: null,

@@ -35,6 +35,7 @@ npm run dev        # http://localhost:5173/ （--host 付きなので同一LAN�
 | マウス | 右ドラッグ（暫定で左ドラッグも）：回転／中ドラッグ・Shift+左ドラッグ：平行移動／ホイール：ズーム |
 | キーボード | Space：再生/一時停止／`.`：1ステップ／Q・E：上下移動／矢印：平行移動 |
 | 部品（初期状態のとき） | 部品をタップ：選択／部品をドラッグ：移動（近くのポートに吸着）／何もない所をタップ：選択解除 |
+| 設定（初期状態のとき） | 部品を選ぶと「設定」に −／＋ が出る（発射機：速さ・角度・間隔、バネ：打ち上げの速さ・天板の傾き） |
 | 部品のキー | R：回転／Delete：削除／Ctrl(⌘)+Z：元に戻す／Ctrl(⌘)+Shift+Z・Ctrl+Y：やり直し／Esc：選択解除 |
 
 ## 構成
@@ -54,7 +55,8 @@ src/
     layout.ts               縦切り用のレール3本＋鉄球の配置
   render/LabView.ts         Three.js 描画（物理状態を読むだけ。前後tickを補間）
   edit/placement.ts         配置・接続のルール（グリッド、ポート吸着、重なり、鉄球の開始位置）。純粋関数
-  edit/EditorModel.ts       配置の編集と元に戻す/やり直し
+  edit/EditorModel.ts       配置・設定の編集と元に戻す/やり直し
+  edit/params.ts            画面で変えられる装置の設定（範囲と刻み）
   input/PartDragController.ts 部品ドラッグと視点操作の振り分け
   ui/EditPanel.ts           装置パレットと選択中の部品の操作
   render/DeviceLayer.ts     配置に追従する装置の描画（ポートの輪、選択枠、発射機のばね）

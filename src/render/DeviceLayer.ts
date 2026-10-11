@@ -4,6 +4,7 @@ import type { Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { buildRailTrack, portWorldPosition } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
+import { planLauncher } from '../sim/launcher';
 import { LauncherModelFactory } from './LauncherModel';
 import { SpringModelFactory } from './SpringModel';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
@@ -57,7 +58,9 @@ export class DeviceLayer {
     const alive = new Set<string>();
     for (const d of devices) {
       alive.add(d.id);
-      const key = JSON.stringify([d.position, d.rotationYDeg, d.params ?? null]);
+      // 発射機は接続で溝の角度が変わるので、角度もキーに含める
+      const launcherAngle = d.type === 'launcher' ? planLauncher(d, devices).angle : 0;
+      const key = JSON.stringify([d.position, d.rotationYDeg, d.params ?? null, launcherAngle]);
       const existing = this.rails.get(d.id);
       if (existing?.key === key) continue;
       if (existing) this.disposeRail(existing.group);
@@ -65,7 +68,7 @@ export class DeviceLayer {
         d.type === 'rail'
           ? this.railFactory.createRail(buildRailTrack(d))
           : d.type === 'launcher'
-            ? this.launcherFactory.create(d)
+            ? this.launcherFactory.create(d, launcherAngle)
             : this.springFactory.create(d);
       group.userData.deviceId = d.id;
       this.root.add(group);

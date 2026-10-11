@@ -165,7 +165,7 @@ describe('バネ（物理あり）', () => {
 describe('バネの編集', () => {
   it('傾きを変えられ、元に戻せる', () => {
     const m = new EditorModel([spring(0)], 1);
-    expect(m.setParam('S', 'tiltDegrees', 30, '天板の傾き')).toBe(true);
+    expect(m.setParam('S', 'tiltDegrees', 30)).toBe(true);
     expect(springParams(m.devices[0]).tiltDegrees).toBe(30);
     expect(m.message?.text).toContain('天板の傾き');
     m.undo();
