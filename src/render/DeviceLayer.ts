@@ -7,6 +7,7 @@ import { quatFromYawPitch } from '../sim/Simulation';
 import { planLauncher } from '../sim/launcher';
 import { LauncherModelFactory } from './LauncherModel';
 import { SpringModelFactory } from './SpringModel';
+import { GoalModelFactory } from './GoalModels';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
@@ -23,6 +24,7 @@ export class DeviceLayer {
   private readonly railFactory = new RailModelFactory(this.mats);
   private readonly launcherFactory = new LauncherModelFactory(this.mats);
   private readonly springFactory = new SpringModelFactory(this.mats);
+  private readonly goalFactory = new GoalModelFactory(this.mats);
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
   private readonly supports = new THREE.Group();
   private readonly markers = new THREE.Group();
@@ -69,7 +71,11 @@ export class DeviceLayer {
           ? this.railFactory.createRail(buildRailTrack(d))
           : d.type === 'launcher'
             ? this.launcherFactory.create(d, launcherAngle)
-            : this.springFactory.create(d);
+            : d.type === 'spring'
+              ? this.springFactory.create(d)
+              : d.type === 'goal'
+                ? this.goalFactory.createGoal(d)
+                : this.goalFactory.createPlatform(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
       this.rails.set(d.id, { key, group });
@@ -171,6 +177,14 @@ export class DeviceLayer {
     for (const [id, o] of offsets) {
       const r = this.rails.get(id);
       if (r) this.springFactory.setCompression(r.group, o);
+    }
+  }
+
+  /** ゴールの光り（strength: deviceId → 0..1） */
+  setGoalFlash(strength: ReadonlyMap<string, number>): void {
+    for (const [id, v] of strength) {
+      const r = this.rails.get(id);
+      if (r) this.goalFactory.setGoalFlash(r.group, v);
     }
   }
 

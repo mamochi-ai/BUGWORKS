@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { BallState, Simulation } from '../sim/Simulation';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { PHYSICS_HZ } from '../sim/constants';
 import { plungerCompression } from '../sim/launcher';
 import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
@@ -59,6 +60,13 @@ export class LabView {
   render(camera: THREE.Camera, alpha: number): void {
     this.devices.setLauncherCharge(launcherCharge(this.sim));
     this.devices.setSpringCompression(new Map(this.sim.springCompressions().map((s) => [s.deviceId, s.offset])));
+    // 球が入ったゴールは 0.6 秒かけて光が引く
+    const flashTicks = 0.6 * PHYSICS_HZ;
+    this.devices.setGoalFlash(
+      new Map(
+        this.sim.snapshot().goals.map((g) => [g.deviceId, g.lastHitTick === null ? 0 : Math.max(0, 1 - (this.sim.tick - g.lastHitTick) / flashTicks)]),
+      ),
+    );
     const frames = this.sim.readBallFrames();
     while (this.ballPool.length < frames.length) {
       const m = new THREE.Mesh(this.ballGeo, this.ballMat);

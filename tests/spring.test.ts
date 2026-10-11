@@ -153,8 +153,8 @@ describe('バネ（物理あり）', () => {
     let maxY = 0;
     for (let i = 0; i < PHYSICS_HZ * 6; i++) {
       s.step();
-      const b = s.readBalls().find((x) => x.id === 0)!;
-      if (s.snapshot().springs[0].launches > 0) maxY = Math.max(maxY, b.position[1]);
+      const b = s.readBalls().find((x) => x.id === 0); // ゴールに入ると回収されて消える
+      if (b && s.snapshot().springs[0].launches > 0) maxY = Math.max(maxY, b.position[1]);
     }
     expect(maxY).toBeGreaterThan(1.5);
     expect(s.snapshot().springs[0].launches).toBeGreaterThanOrEqual(4);

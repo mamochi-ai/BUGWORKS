@@ -1,6 +1,7 @@
 import type { DeviceType, PlacedDevice } from '../sim/layout';
 import { launcherParams } from '../sim/launcher';
 import { springParams } from '../sim/spring';
+import { platformHeight } from '../sim/goal';
 
 /**
  * 画面で変えられる装置の設定（範囲と刻みは試作値, DECISIONS.md D-22）。
@@ -26,6 +27,8 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
     { key: 'launchSpeed', label: '打ち上げの速さ', unit: 'm/s', min: 2, max: 8, step: 0.5 },
     { key: 'tiltDegrees', label: '天板の傾き', unit: '°', min: 0, max: 30, step: 15 },
   ],
+  goal: [],
+  platform: [{ key: 'heightMeters', label: '高さ', unit: 'm', min: 0.2, max: 2, step: 0.2 }],
 };
 
 export function findSpec(type: DeviceType, key: string): ParamSpec | undefined {
@@ -43,7 +46,13 @@ export function normalizeParam(spec: ParamSpec, value: number): number {
 /** 今の値（未設定なら JSON または既定値） */
 export function paramValue(device: PlacedDevice, key: string): number {
   const all: Record<string, number> =
-    device.type === 'launcher' ? { ...launcherParams(device) } : device.type === 'spring' ? { ...springParams(device) } : {};
+    device.type === 'launcher'
+      ? { ...launcherParams(device) }
+      : device.type === 'spring'
+        ? { ...springParams(device) }
+        : device.type === 'platform'
+          ? { heightMeters: platformHeight(device) }
+          : {};
   return all[key] ?? NaN;
 }
 

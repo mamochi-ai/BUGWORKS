@@ -17,6 +17,8 @@ export interface DeviceDef {
   ports: PortDef[];
   params: Record<string, number | string>;
   movingParts: string[];
+  /** devices.v0.1.json に無く、試作で追加した装置（DECISIONS.md D-23） */
+  prototypeOnly?: true;
 }
 
 const PORT_TYPES: readonly string[] = ['ball', 'shaft', 'signal'];
@@ -57,8 +59,20 @@ export function parseDeviceCatalog(json: { devices: unknown[] }): Map<string, De
   return map;
 }
 
-/** 装置定義は reference/shiyou_specs/devices.v0.1.json を唯一の出典とする（マスター仕様 §3）。 */
-export const DEVICE_CATALOG: ReadonlyMap<string, DeviceDef> = parseDeviceCatalog(devicesJson);
+/**
+ * 試作で追加した装置。仕様の装置JSONには無い（SPEC_GAPS G-04：ステージ資料の goal_sensor / raised_platform に相当）。
+ * 寸法は仮。仕様で定義されたら JSON に移す。
+ */
+const PROTOTYPE_DEVICES: DeviceDef[] = [
+  { id: 'goal', name: 'ゴール', size: [0.8, 0.4, 0.8], ports: [], params: {}, movingParts: [], prototypeOnly: true },
+  { id: 'platform', name: '台', size: [1.6, 1, 1.6], ports: [], params: { heightMeters: 1 }, movingParts: [], prototypeOnly: true },
+];
+
+/** 装置定義は reference/shiyou_specs/devices.v0.1.json を出典とする（マスター仕様 §3）。試作の追加分は別扱い */
+export const DEVICE_CATALOG: ReadonlyMap<string, DeviceDef> = new Map([
+  ...parseDeviceCatalog(devicesJson),
+  ...PROTOTYPE_DEVICES.map((d) => [d.id, d] as const),
+]);
 
 export const CATALOG_UNITS = devicesJson.units;
 export const CATALOG_UP_AXIS = devicesJson.upAxis;

@@ -34,6 +34,7 @@ export class Hud {
         <div><span>tick</span><b data-k="tick">0</b></div>
         <div><span>時間</span><b data-k="time">0.00 s</b></div>
         <div><span>球数</span><b data-k="balls">0 / ${MAX_BALLS}</b></div>
+        <div><span>ゴール</span><b data-k="goals">0</b></div>
         <div><span>描画</span><b data-k="fps">– fps</b></div>
         <div><span>物理</span><b data-k="tps">– tick/s</b></div>
         <div><span>物理負荷</span><b data-k="pms">– ms</b></div>
@@ -47,6 +48,9 @@ export class Hud {
         <button type="button" data-a="home" aria-label="視点を戻す"><i>⌂</i><span>視点</span></button>
         <button type="button" data-a="help" aria-label="操作説明" aria-expanded="false"><i>?</i><span>操作</span></button>
       </nav>
+      <div class="clear-banner" data-k="banner" role="status" aria-live="assertive" hidden>
+        <strong>✓ クリア！</strong><span>球がゴールに入りました</span>
+      </div>
       <aside class="help" data-k="help" hidden>
         <h2>操作</h2>
         <dl>
@@ -101,6 +105,10 @@ export class Hud {
     this.el.tick.textContent = String(sim.tick);
     this.el.time.textContent = `${sim.timeSeconds.toFixed(2)} s`;
     this.el.balls.textContent = `${sim.ballCount} / ${MAX_BALLS}`;
+    this.el.goals.textContent = String(sim.goalHits);
+    // 最初に入ってから 4 秒間だけ大きく知らせる（その後もゴール数は右上に残る）
+    const first = sim.firstGoalTick;
+    this.el.banner.hidden = first === null || sim.tick - first > 4 * PHYSICS_HZ;
     this.el.fps.textContent = `${stats.fps.toFixed(0)} fps`;
     this.el.tps.textContent = `${stats.ticksPerSecond.toFixed(0)} tick/s`;
     this.el.pms.textContent = `${stats.physicsMsPerFrame.toFixed(2)} ms`;

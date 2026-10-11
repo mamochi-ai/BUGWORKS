@@ -10,6 +10,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+/* hidden 属性は display の指定より常に優先する（パネルやバナーが消えない不具合の防止） */
+[hidden] { display: none !important; }
 html, body {
   margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
   font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
@@ -34,7 +36,7 @@ html, body {
 
 .readout {
   position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right));
-  display: grid; grid-template-columns: repeat(3, auto); gap: 4px 14px; background: var(--panel);
+  display: grid; grid-template-columns: repeat(4, auto); gap: 4px 14px; background: var(--panel);
   border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px;
   font-variant-numeric: tabular-nums; pointer-events: none;
 }
@@ -98,6 +100,9 @@ html, body {
 .edit button:not(:disabled):active { background: #30363e; }
 .edit button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
 .edit button.add { border-color: var(--orange); color: var(--orange); }
+.edit .palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.edit .palette button { font-size: 13px; padding: 4px 6px; gap: 4px; }
+.edit .palette button:first-child { grid-column: 1 / -1; }
 .edit [hidden] { display: none; }
 .edit .params { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
 .edit .params h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
@@ -115,3 +120,17 @@ html, body {
   .edit { width: 168px; top: calc(max(12px, env(safe-area-inset-top)) + 56px); }
   .edit .row button span { display: none; }
 }
+
+/* クリアの知らせ（記号＋文字。色だけに頼らない） */
+.clear-banner {
+  position: absolute; left: 0; right: 0; top: 22%; margin: 0 auto; width: max-content; max-width: calc(100vw - 32px);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none;
+  background: rgba(20, 23, 27, 0.92); border: 2px solid var(--cyan); border-radius: 16px; padding: 14px 28px;
+  box-shadow: 0 0 32px rgba(63, 212, 255, 0.35);
+}
+.clear-banner strong { font-size: 30px; color: var(--cyan); letter-spacing: 0.06em; }
+.clear-banner span { font-size: 15px; color: var(--text); }
+@media (prefers-reduced-motion: no-preference) {
+  .clear-banner:not([hidden]) { animation: banner-in 260ms ease-out; }
+}
+@keyframes banner-in { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
