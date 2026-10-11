@@ -3,7 +3,7 @@ const { chromium, devices } = require(process.env.PLAYWRIGHT_MODULE || 'playwrig
 const out = process.argv[2] || '.';
 const url = process.env.BUGWORKS_URL || 'http://localhost:5173/';
 const camState = (p) => p.evaluate(() => { const r = window.__bugworks.rig; return { pos: r.camera.position.toArray().map(v=>+v.toFixed(3)), target: r.controls.target.toArray().map(v=>+v.toFixed(3)) }; });
-const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return { state: b.ctl.state, tick: b.sim.tick, ball: b.sim.readBall().position.map(v=>+v.toFixed(3)) }; });
+const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return { state: b.ctl.state, tick: b.sim.tick, ball: (b.sim.readBalls()[0]?.position ?? []).map(v=>+v.toFixed(3)) }; });
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
   const errors = [];
@@ -13,6 +13,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   page.on('console', m => { if (m.type() === 'error') errors.push('desktop console: ' + m.text()); });
   await page.goto(url);
   await page.waitForFunction(() => window.__bugworks);
+  await page.getByRole('button', { name: '自由研究' }).click(); // 起動時のステージ選択を閉じる
   await page.waitForTimeout(500);
   await page.screenshot({ path: out + '/desktop_initial.png' });
   console.log('initial', await simState(page));
@@ -45,12 +46,13 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   ip.on('pageerror', e => errors.push('ipad: ' + e.message));
   await ip.goto(url);
   await ip.waitForFunction(() => window.__bugworks);
+  await ip.getByRole('button', { name: '自由研究' }).tap();
   await ip.waitForTimeout(500);
   const cdp = await ctx.newCDPSession(ip);
   const touch = async (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x,y],i)=>({x,y,id:i})) });
   const d0 = await camState(ip);
-  await touch('touchStart', [[500,400]]);
-  for (let i=1;i<=10;i++) await touch('touchMove', [[500+i*15,400]]);
+  await touch('touchStart', [[900,650]]);
+  for (let i=1;i<=10;i++) await touch('touchMove', [[900+i*15,650]]);
   await touch('touchEnd', []);
   await ip.waitForTimeout(500);
   const d1 = await camState(ip);
@@ -77,7 +79,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   await ctx.close(); // 前のページを閉じてから次を開く（ソフトウェア描画でCPUを奪い合わないように）
   // ---- iPad Mini（縦向き）のレイアウト確認
   const ctx2 = await browser.newContext({ ...devices['iPad Mini'] });
-  const pm = await ctx2.newPage(); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.waitForTimeout(400);
+  const pm = await ctx2.newPage(); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.getByRole('button', { name: '自由研究' }).tap(); await pm.waitForTimeout(400);
   await pm.screenshot({ path: out + '/ipad_mini_portrait.png' });
   console.log('errors:', errors.length ? errors : 'none');
   await browser.close();

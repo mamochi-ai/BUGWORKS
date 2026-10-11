@@ -13,7 +13,7 @@
 | G-03 | グリッド：装置/建築JSONは 0.25m、`stage1_blockout.json` は `gridSize: 1` | devices / architecture / stage1_blockout | 試作は 0.25m グリッドを表示 |
 | G-04 | 装置ID体系の不一致（ゴール・台・カーブレール・羽根車・軸・可動橋は試作で追加済み, DECISIONS D-23〜D-25）：装置JSON `launcher`,`rail`,`gearbox`,`spring`,`magnet`,`rotator` vs blockout `ball_launcher`,`straight_rail`,`curved_rail`,`spring_pad`,`gear`(teeth),`goal_sensor`,`raised_platform`,`weight_trigger`,`movable_bridge` | devices / stage1_blockout | blockout の多くの種類（カーブレール、ゴール、台、トリガー、可動橋）は装置JSONに定義が無い。装置定義の追加か対応表が必要 |
 | G-05 | 向きの不一致：装置JSONのレールは前方 +Z。blockout は `rotationYDegrees: 0` のままレールを +X 方向に並べている | devices / stage1_blockout | blockout をそのまま読むとレールが進行方向に対し横向きになる。どちらかの修正が必要 |
-| G-06 | ステージ1の内容が資料間で異なる。v1.0：1-1「あと一本」1-2「角度の問題」1-3「三度目の正直」1-4「上に行きたい（バネ）」。stage1 v0.1：1-1「はじめの一歩」1-2「バネでジャンプ」1-3「曲がって運ぶ」1-4「歯車で動かす」。歯車は v1.0 では第3章 | stages README / stage1 README・blockout | 未実装。どちらを正とするか要決定 |
+| G-06 | ステージ1の内容が資料間で異なる。v1.0：1-1「あと一本」1-2「角度の問題」1-3「三度目の正直」1-4「上に行きたい（バネ）」。stage1 v0.1：1-1「はじめの一歩」1-2「バネでジャンプ」1-3「曲がって運ぶ」1-4「歯車で動かす」。歯車は v1.0 では第3章 | stages README / stage1 README・blockout | **v0.1 を基準に決定**（ユーザー判断, DECISIONS D-26）。座標は作り直し |
 | G-07 | 操作の割り当て：マスター「左クリック選択・ドラッグ配置・右ドラッグ回転」／操作ガイド画像「右ドラッグ回転」と「右クリック削除」が同じボタン／ステージ資料「1本指ドラッグで回転」 vs マスター「1本指で選択/ドラッグ、空き領域で視点操作」 | MASTER §8 / controls.png / stages README | 「部品上なら部品ドラッグ、空き領域なら回転」で試作済み（DECISIONS D-17）。iPad 実機で要評価 |
 | G-08 | 設計図の保存項目：マスター §7 は `schemaVersion, engineVersion, physicsProfile, seed, devices, connections, ports, initialState`。stage1 README は `schemaVersion, stageId, parts, connections, creatorDefinedName`（`parts` と `devices`、`creatorDefinedName` と `title` の名称差、stageId がマスターに無い） | MASTER §7 / stage1 README | 未実装。マスターを基準にし、stageId を任意キーとして追加する案 |
 | G-09 | 証明書サンプルの `triggeredBugIds: ["infinite_loop"]` が、バグJSONのID体系 `BUG-03`（無限ループ君）と一致しない | certificate.example / hidden_bugs_developer | 未実装。`BUG-xx` に統一する案 |
@@ -22,7 +22,7 @@
 | G-12 | 設計図ルートの `ports` キーの役割が不明（ポートは装置定義側にあり、接続は `connections` が持つ） | MASTER §7 | 未実装。要定義 |
 | G-13 | 公開図鑑JSONに未発見バグの効果文 `description_unlocked` がそのまま入っている。発動条件ではないが、配信物に含めると効果が事前に読める | bug_codex_public | 試作では未使用。図鑑実装時は発見時にだけ参照する構造か、配信方法を要検討（DECISIONS D-12） |
 | G-14 | ASSET_INVENTORY は画像ZIPを「別途保管（未同梱）」としているが、2026-10-10 の一括ZIPには同梱されている | ASSET_INVENTORY.csv / README_収録一覧 | 一覧の状態更新が必要 |
-| G-15 | stage1 README の時間表（1-4「歯車と橋」）とステージ v1.0 の初回5分表（2:40 バネ、3:30 異常ヒント）が一致しない | stage1 README / stages README | G-06 と合わせて整理 |
+| G-15 | stage1 README の時間表（1-4「歯車と橋」）とステージ v1.0 の初回5分表（2:40 バネ、3:30 異常ヒント）が一致しない | stage1 README / stages README | v0.1 の流れを採用（D-26）。時間表は未使用 |
 | G-17 | 発射機の `angleDegrees: 45` はレールへの送り出しと両立しない（45°で撃つとレールを飛び越える）。角度の意味（打ち上げ角か、アームの傾きか）が未定義 | devices.v0.1 | 角度＝溝の傾き（後端が軸）。レールにつないでいる間は 0° に固定（DECISIONS D-18） |
 | G-18 | 発射機の `ball_out`（z=0.65）が外形（奥行き1.4の半分＝0.7）の内側にあり、レールをつなぐと外形が重なる。ポート座標が外形の内側にある装置はほかにも無いか要確認 | devices.v0.1 | 接続している2台は重なり判定から除外（D-15） |
 | G-19 | 発射機の発射回数（1回か連続か）が未定義 | devices.v0.1 | 連続で確定（ユーザー判断, D-18） |

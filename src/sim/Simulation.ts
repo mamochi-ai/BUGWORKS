@@ -334,6 +334,19 @@ export class Simulation {
     };
   }
 
+  /**
+   * ステージのクリア判定に使う出来事（この再生で一度でも起きたか）。
+   * 判定は物理の状態から読むだけで、ゲームの進行には影響しない。
+   */
+  events(): { ball_enter_goal: boolean; spring_triggered: boolean; paddle_turned: boolean; bridge_connected: boolean } {
+    return {
+      ball_enter_goal: this.goalHits > 0,
+      spring_triggered: this.springs.some((s) => s.launches > 0),
+      paddle_turned: this.paddles.some((p) => p.passes > 0),
+      bridge_connected: this.bridges.some((b) => b.angle === 0),
+    };
+  }
+
   /** 描画用：バネごとの縮み量 */
   springCompressions(): { deviceId: string; offset: number }[] {
     return this.springs.map((sp) => ({ deviceId: sp.deviceId, offset: compressionAt(sp.phase, sp.t, sp) }));

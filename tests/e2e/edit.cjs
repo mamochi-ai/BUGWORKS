@@ -7,6 +7,7 @@ const out = process.argv[2] || '.';
   const p = await ctx.newPage(); const errs = [];
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type()==='error' && errs.push(m.text()));
   await p.goto(process.env.BUGWORKS_URL || 'http://localhost:5173/'); await p.waitForFunction(() => window.__bugworks, null, { timeout: 60000 });
+  await p.getByRole('button', { name: '自由研究' }).tap(); // 起動時のステージ選択を閉じる
   await p.waitForTimeout(500);
   const cdp = await ctx.newCDPSession(p);
   const touch = async (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x,y],i)=>({x,y,id:i})) });
@@ -31,7 +32,7 @@ const out = process.argv[2] || '.';
   await p.getByRole('button', { name: '削除' }).tap();
   await p.waitForTimeout(300);
   console.log('1a deleted', (await state()).msg);
-  await p.getByRole('button', { name: '＋ レール' }).tap();
+  await p.getByRole('button', { name: /^レールを追加/ }).tap();
   await p.waitForTimeout(300);
   let s = await state(); console.log('1 added', s);
   const newId = s.sel;
@@ -74,7 +75,7 @@ const out = process.argv[2] || '.';
   s = await state(); console.log('6 overlap drop', s.msg, s.conns);
 
   // 7) 何もない所をタップ → 選択解除
-  await touch('touchStart', [[1050, 120]]); await touch('touchEnd', []); await p.waitForTimeout(200);
+  await touch('touchStart', [[1050, 640]]); await touch('touchEnd', []); await p.waitForTimeout(200);
   console.log('7 tap empty sel', (await state()).sel);
   await p.screenshot({ path: out + '/edit_final.png' });
   console.log('errors', errs);

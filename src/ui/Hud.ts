@@ -18,6 +18,8 @@ export interface HudStats {
 
 /** UI文字は画像ではなくHTMLテキストで描画する（UI画像シートは参考デザインのみ） */
 export class Hud {
+  /** 汎用の「クリア！」を出すか（ステージ中はステージのクリア表示に任せる） */
+  goalBanner = true;
   private el: Record<string, HTMLElement> = {};
 
   constructor(
@@ -108,7 +110,7 @@ export class Hud {
     this.el.goals.textContent = String(sim.goalHits);
     // 最初に入ってから 4 秒間だけ大きく知らせる（その後もゴール数は右上に残る）
     const first = sim.firstGoalTick;
-    this.el.banner.hidden = first === null || sim.tick - first > 4 * PHYSICS_HZ;
+    this.el.banner.hidden = !this.goalBanner || first === null || sim.tick - first > 4 * PHYSICS_HZ;
     this.el.fps.textContent = `${stats.fps.toFixed(0)} fps`;
     this.el.tps.textContent = `${stats.ticksPerSecond.toFixed(0)} tick/s`;
     this.el.pms.textContent = `${stats.physicsMsPerFrame.toFixed(2)} ms`;

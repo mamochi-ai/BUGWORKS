@@ -1,3 +1,4 @@
+import { getDeviceDef } from '../sim/catalog';
 import type { DeviceType, PlacedDevice, SliceLayout } from '../sim/layout';
 import { findSpec, formatParam, normalizeParam, paramValue } from './params';
 import {
@@ -29,6 +30,10 @@ const HISTORY_LIMIT = 100;
 export class EditorModel {
   private _devices: PlacedDevice[];
   private _selectedId: string | null = null;
+  /** ステージで最初から置いてある装置（動かせない） */
+  private locked = new Set<string>();
+  /** ステージで置ける装置と数（null＝自由研究：制限なし） */
+  private _inventory: Partial<Record<DeviceType, number>> | null = null;
   private _message: EditMessage | null = null;
   private past: PlacedDevice[][] = [];
   private future: PlacedDevice[][] = [];
@@ -65,6 +70,60 @@ export class EditorModel {
     return this.past.length > 0;
   }
 
+  /** ステージの装置で、動かせないか */
+  isLocked(id: string): boolean {
+    return this.locked.has(id);
+  }
+
+  /** ステージ中か（置ける装置に制限がある） */
+  get inStage(): boolean {
+    return this._inventory !== null;
+  }
+
+  /** ステージで置ける装置の種類（自由研究なら null） */
+  get inventoryTypes(): DeviceType[] | null {
+    return this._inventory ? (Object.keys(this._inventory) as DeviceType[]) : null;
+  }
+
+  /** あと何個置けるか（自由研究なら無制限） */
+  remaining(type: DeviceType): number {
+    if (!this._inventory) return Infinity;
+    const placed = this._devices.filter((d) => d.type === type && !this.locked.has(d.id)).length;
+    return (this._inventory[type] ?? 0) - placed;
+  }
+
+  /** ステージを始める：配置を差し替え、元からある装置を固定し、置ける装置を制限する（履歴は消す） */
+  startStage(devices: readonly PlacedDevice[], inventory: Partial<Record<DeviceType, number>>, text: string): void {
+    this.locked = new Set(devices.map((d) => d.id));
+    this._inventory = { ...inventory };
+    this.reset(devices, text);
+  }
+
+  /** 自由研究：制限なしで配置を差し替える（履歴は消す） */
+  startFree(devices: readonly PlacedDevice[], text: string): void {
+    this.locked = new Set();
+    this._inventory = null;
+    this.reset(devices, text);
+  }
+
+  private reset(devices: readonly PlacedDevice[], text: string): void {
+    this._devices = clone(devices);
+    this.past = [];
+    this.future = [];
+    this._selectedId = null;
+    this._message = { kind: 'info', text };
+    this.emit('layout');
+    this.emit('selection');
+    this.emit('message');
+  }
+
+  /** ステージの装置なら理由を出して true */
+  private guardLocked(id: string): boolean {
+    if (!this.locked.has(id)) return false;
+    this.fail('この装置はステージの一部なので動かせません');
+    return true;
+  }
+
   get canRedo(): boolean {
     return this.future.length > 0;
   }
@@ -88,6 +147,7 @@ export class EditorModel {
   /** 装置を追加する。near 付近の空き場所に置き、選択状態にする */
   addDevice(type: DeviceType, nearX: number, nearZ: number): string | null {
     if (this._devices.length >= PLACEMENT.maxDevices) return this.fail(PROBLEM_TEXT.too_many);
+    if (this.remaining(type) <= 0) return this.fail(`このステージで置ける${getDeviceDef(type).name}はもうありません`);
     const id = this.nextId(type);
     const spot = findFreeSpot({ id, type, position: [nearX, 0, nearZ], rotationYDeg: 0 }, nearX, nearZ, this._devices);
     if (!spot) return this.fail('空いている場所がありません');
@@ -99,14 +159,14 @@ export class EditorModel {
   /** ドラッグ中のプレビュー（モデルは変更しない） */
   previewMove(id: string, desiredX: number, desiredZ: number): PlacementEvaluation | null {
     const d = this.find(id);
-    if (!d) return null;
+    if (!d || this.guardLocked(id)) return null;
     return evaluateMove(d, desiredX, desiredZ, this.others(id));
   }
 
   /** ドラッグ終了。置けない場合は元の位置のまま理由を表示する */
   commitMove(id: string, evaluation: PlacementEvaluation): boolean {
     const before = this.find(id);
-    if (!before) return false;
+    if (!before || this.guardLocked(id)) return false;
     if (!evaluation.ok) {
       this.fail(`置けません：${PROBLEM_TEXT[evaluation.problem!]}`);
       return false;
@@ -124,13 +184,13 @@ export class EditorModel {
 
   rotate(id: string): boolean {
     const d = this.find(id);
-    if (!d) return false;
+    if (!d || this.guardLocked(id)) return false;
     return this.tryReplace({ ...d, rotationYDeg: (((d.rotationYDeg + 90) % 360) + 360) % 360 }, `${id} を回転しました`, '回転できません');
   }
 
   changeHeight(id: string, steps: number): boolean {
     const d = this.find(id);
-    if (!d) return false;
+    if (!d || this.guardLocked(id)) return false;
     if (restsOnSurface(d.type)) {
       this.fail(d.type === 'platform' ? '台の高さは「設定」で変えてください' : 'この装置は真下の台（なければ床）の上に置かれます');
       return false;
@@ -146,7 +206,7 @@ export class EditorModel {
   /** 装置の設定を変える（範囲・刻みに合わせてから保存。元に戻せる） */
   setParam(id: string, key: string, value: number): boolean {
     const d = this.find(id);
-    if (!d) return false;
+    if (!d || this.guardLocked(id)) return false;
     const spec = findSpec(d.type, key);
     if (!spec) {
       this.fail(`${id} には「${key}」の設定はありません`);
@@ -162,7 +222,7 @@ export class EditorModel {
   }
 
   remove(id: string): boolean {
-    if (!this.find(id)) return false;
+    if (!this.find(id) || this.guardLocked(id)) return false;
     this.commit(
       this._devices.filter((d) => d.id !== id),
       `${id} を削除しました`,
@@ -173,6 +233,10 @@ export class EditorModel {
 
   /** 配置をまるごと差し替える（見本の読み込みなど。元に戻せる） */
   loadLayout(devices: readonly PlacedDevice[], text: string): void {
+    if (this.inStage) {
+      this.fail('ステージ中は見本を読み込めません（ステージ選択の「自由研究」で使えます）');
+      return;
+    }
     this.commit(clone(devices), text);
     this.select(null);
   }
@@ -231,6 +295,8 @@ export class EditorModel {
   }
 
   private fail(text: string): null {
+    // ドラッグ中など同じ理由が続くときは知らせ直さない
+    if (this._message?.kind === 'error' && this._message.text === text) return null;
     this._message = { kind: 'error', text };
     this.emit('message');
     return null;

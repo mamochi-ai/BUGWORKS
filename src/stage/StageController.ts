@@ -1,0 +1,106 @@
+import type { EditorModel } from '../edit/EditorModel';
+import type { SliceLayout } from '../sim/layout';
+import type { Simulation } from '../sim/Simulation';
+import type { SimulationController } from '../sim/SimulationController';
+import { loadProgress, saveProgress, type Progress } from './progress';
+import { findStage, type StageDef, type StageEvent } from './stages';
+
+type Change = 'stage' | 'clear' | 'events';
+
+/**
+ * ステージの進行：ステージを始める／自由研究に戻る／クリアを判定して記録する。
+ * クリアは「1回の再生で、必要な出来事がすべて起きた」とき（リセットでやり直し）。時間で勝手に進めることはしない。
+ */
+export class StageController {
+  private _current: StageDef | null = null;
+  private clearedThisRun = false;
+  private lastEvents = '';
+  private progress: Progress = loadProgress();
+  private listeners = new Set<(c: Change) => void>();
+
+  constructor(
+    private readonly editor: EditorModel,
+    private readonly ctl: SimulationController,
+    private readonly sim: Simulation,
+    private readonly freeLayout: SliceLayout,
+  ) {
+    ctl.onChange(() => {
+      if (ctl.state === 'ready') {
+        this.clearedThisRun = false;
+        this.emitEvents();
+      }
+    });
+  }
+
+  get current(): StageDef | null {
+    return this._current;
+  }
+
+  isCleared(id: string): boolean {
+    return this.progress.cleared.includes(id);
+  }
+
+  /** 今の再生で起きた出来事 */
+  events(): Record<StageEvent, boolean> {
+    return this.sim.events();
+  }
+
+  start(id: string): boolean {
+    const st = findStage(id);
+    if (!st || st.comingSoon) return false;
+    this.ctl.ensureEditable();
+    this._current = st;
+    this.clearedThisRun = false;
+    this.editor.startStage(st.devices, st.inventory, `ステージ ${st.id}「${st.name}」`);
+    this.emit('stage');
+    return true;
+  }
+
+  free(): void {
+    this.ctl.ensureEditable();
+    this._current = null;
+    this.editor.startFree(this.freeLayout.devices, '自由研究：好きな装置を置いて試せます');
+    this.emit('stage');
+  }
+
+  /** 次に遊べるステージ */
+  next(): StageDef | null {
+    if (!this._current) return null;
+    const ids = ['1-1', '1-2', '1-3', '1-4', '1-5'];
+    const i = ids.indexOf(this._current.id);
+    const n = i >= 0 ? findStage(ids[i + 1] ?? '') : undefined;
+    return n && !n.comingSoon ? n : null;
+  }
+
+  /** 描画フレームごとに呼ぶ */
+  update(): void {
+    if (!this._current) return;
+    this.emitEvents();
+    if (this.clearedThisRun || this.ctl.state === 'ready') return;
+    const ev = this.sim.events();
+    if (this._current.required.every((e) => ev[e])) {
+      this.clearedThisRun = true;
+      if (!this.progress.cleared.includes(this._current.id)) {
+        this.progress = { cleared: [...this.progress.cleared, this._current.id] };
+        saveProgress(this.progress);
+      }
+      this.emit('clear');
+    }
+  }
+
+  onChange(fn: (c: Change) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private emitEvents(): void {
+    const key = JSON.stringify(this.sim.events());
+    if (key === this.lastEvents) return;
+    this.lastEvents = key;
+    this.emit('events');
+  }
+
+  private emit(c: Change): void {
+    for (const fn of this.listeners) fn(c);
+  }
+}
