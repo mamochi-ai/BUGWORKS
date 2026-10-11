@@ -42,7 +42,7 @@ npm run dev        # http://localhost:5173/ （--host 付きなので同一LAN�
 ```
 src/
   sim/        物理（描画・DOMに非依存。Nodeでテスト可能）
-    launcher.ts             鉄球発射機の発射ルール（間隔・向き・球の上限）
+    launcher.ts             鉄球発射機（溝・ばね・装填口の形、発射と装填のルール、球の上限）
     constants.ts            120Hz 固定刻み（検証設定JSONから取得）
     FixedStepClock.ts       可変フレーム → 固定tick 変換（アキュムレータ）
     Simulation.ts           Rapier ワールド。step()=1tick、reset()=同レイアウトから再構築
@@ -57,7 +57,7 @@ src/
   input/PartDragController.ts 部品ドラッグと視点操作の振り分け
   ui/EditPanel.ts           装置パレットと選択中の部品の操作
   render/DeviceLayer.ts     配置に追従する装置の描画（ポートの輪、選択枠、発射機のばね）
-  render/LauncherModel.ts   鉄球発射機の見た目（描画専用、当たり判定は台座の箱）
+  render/LauncherModel.ts   鉄球発射機の見た目（ばねと押し板の動き、装填口。描画専用）
   render/RailModel.ts       レールの見た目（鋼管＋オレンジ金具＋支柱。描画専用、当たり判定は箱のまま）
   input/CameraRig.ts        自由カメラ（OrbitControls をタッチ優先で設定）
   ui/Hud.ts, style.css      HTMLテキストのUI（画像UIシートは使わない）
