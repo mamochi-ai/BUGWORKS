@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "0.1",
+  "name": "BUGWORKS perpetual machine verification",
+  "units": {"distance": "meter", "time": "second", "upAxis": "Y"},
+  "simulation": {"fixedDeltaSeconds": 0.008333333333333333, "warmupSteps": 1200, "maxSteps": 120000, "snapshotEverySteps": 30, "confirmationCycles": 3, "seedRequired": true},
+  "comparison": {"positionToleranceMeters": 0.002, "linearVelocityToleranceMps": 0.005, "angularVelocityToleranceRadps": 0.005, "orientationToleranceRadians": 0.002, "compareDeviceInternalState": true, "compareBugPhase": true, "compareObjectCount": true, "hashIsOnlyPrefilter": true},
+  "requirements": {"externalInputAllowed": false, "minimumOutputEventsPerCycle": 1, "staticEquilibriumAllowed": false, "reverifyMergedBlueprint": true},
+  "limits": {"maxDevices": 500, "maxDynamicObjects": 2000, "maxConnections": 2000, "maxBlueprintBytes": 2000000},
+  "statuses": ["NOT_TESTED", "RUNNING", "CANDIDATE", "VERIFIED", "INCONCLUSIVE", "FAILED", "INCOMPATIBLE"],
+  "note": "Values are initial proposals; calibrate against browser performance and gameplay."
+}
