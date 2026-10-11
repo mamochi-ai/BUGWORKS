@@ -8,7 +8,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   const browser = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
   const errors = [];
   // ---- Desktop
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } }); page.setDefaultTimeout(120000); // ソフトウェア描画では1コマが重いので待ち時間を長めに
   page.on('pageerror', e => errors.push('desktop: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('desktop console: ' + m.text()); });
   await page.goto(url);
@@ -42,7 +42,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
 
   // ---- iPad (touch)
   const ctx = await browser.newContext({ ...devices['iPad Pro 11 landscape'] });
-  const ip = await ctx.newPage();
+  const ip = await ctx.newPage(); ip.setDefaultTimeout(120000); // ソフトウェア描画では1コマが重いので待ち時間を長めに
   ip.on('pageerror', e => errors.push('ipad: ' + e.message));
   await ip.goto(url);
   await ip.waitForFunction(() => window.__bugworks);
@@ -79,7 +79,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   await ctx.close(); // 前のページを閉じてから次を開く（ソフトウェア描画でCPUを奪い合わないように）
   // ---- iPad Mini（縦向き）のレイアウト確認
   const ctx2 = await browser.newContext({ ...devices['iPad Mini'] });
-  const pm = await ctx2.newPage(); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.getByRole('button', { name: '自由研究' }).tap(); await pm.waitForTimeout(400);
+  const pm = await ctx2.newPage(); pm.setDefaultTimeout(120000); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.getByRole('button', { name: '自由研究' }).tap(); await pm.waitForTimeout(400);
   await pm.screenshot({ path: out + '/ipad_mini_portrait.png' });
   console.log('errors:', errors.length ? errors : 'none');
   await browser.close();

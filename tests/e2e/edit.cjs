@@ -4,7 +4,7 @@ const out = process.argv[2] || '.';
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
   const ctx = await b.newContext({ ...devices['iPad Pro 11 landscape'] });
-  const p = await ctx.newPage(); const errs = [];
+  const p = await ctx.newPage(); const errs = []; p.setDefaultTimeout(120000); // ソフトウェア描画では1コマが重いので待ち時間を長めに
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type()==='error' && errs.push(m.text()));
   await p.goto(process.env.BUGWORKS_URL || 'http://localhost:5173/'); await p.waitForFunction(() => window.__bugworks, null, { timeout: 60000 });
   await p.getByRole('button', { name: '自由研究' }).tap(); // 起動時のステージ選択を閉じる
