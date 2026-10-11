@@ -99,36 +99,66 @@ function opposite(a: Vec3, b: Vec3): boolean {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] < -0.99;
 }
 
+/**
+ * ball 型ポートの役割。devices.v0.1.json に入口/出口の区別が無いため、ID の接尾辞で判定する（DECISIONS.md D-18）。
+ * spring の impact のような接尾辞の無い ball ポートは、レールとの接続対象にしない。
+ */
+export function ballPortRole(portId: string): 'in' | 'out' | null {
+  if (portId.endsWith('_out')) return 'out';
+  if (portId.endsWith('_in')) return 'in';
+  return null;
+}
+
+/** 装置の ball 型ポートのうち、入口/出口のどちらかに当たるもの */
+export function ballPorts(device: PlacedDevice): { portId: string; role: 'in' | 'out' }[] {
+  return getDeviceDef(device.type)
+    .ports.filter((p) => p.type === 'ball')
+    .flatMap((p) => {
+      const role = ballPortRole(p.id);
+      return role ? [{ portId: p.id, role }] : [];
+    });
+}
+
+function linked(a: PlacedDevice, aPort: string, b: PlacedDevice, bPort: string): boolean {
+  return samePoint(portWorldPosition(a, aPort), portWorldPosition(b, bPort)) && opposite(portWorldDirection(a, aPort), portWorldDirection(b, bPort));
+}
+
 /** ball ポートの組（出口→入口）。座標が一致し、向きが向かい合っていれば接続とみなす */
 export function findConnections(devices: readonly PlacedDevice[]): Connection[] {
   const out: Connection[] = [];
   for (const a of devices) {
-    for (const b of devices) {
-      if (a.id === b.id) continue;
-      if (
-        samePoint(portWorldPosition(a, 'ball_out'), portWorldPosition(b, 'ball_in')) &&
-        opposite(portWorldDirection(a, 'ball_out'), portWorldDirection(b, 'ball_in'))
-      ) {
-        out.push({ from: { deviceId: a.id, portId: 'ball_out' }, to: { deviceId: b.id, portId: 'ball_in' } });
+    for (const ap of ballPorts(a)) {
+      if (ap.role !== 'out') continue;
+      for (const b of devices) {
+        if (a.id === b.id) continue;
+        for (const bp of ballPorts(b)) {
+          if (bp.role === 'in' && linked(a, ap.portId, b, bp.portId)) {
+            out.push({ from: { deviceId: a.id, portId: ap.portId }, to: { deviceId: b.id, portId: bp.portId } });
+          }
+        }
       }
     }
   }
   return out;
 }
 
-/**
- * 鉄球を置くレール（発射機ができるまでの暫定ルール, DECISIONS.md D-16）：
- * 入口がどこにもつながっていないレールのうち、入口がいちばん高いもの。同じ高さなら配置順が先のもの。
- */
-export function chooseBallStart(devices: readonly PlacedDevice[]): string | null {
-  const fed = new Set(findConnections(devices).map((c) => c.to.deviceId));
-  let best: { id: string; y: number } | null = null;
-  for (const d of devices) {
-    if (fed.has(d.id)) continue;
-    const y = portWorldPosition(d, 'ball_in')[1];
-    if (!best || y > best.y + 1e-9) best = { id: d.id, y };
+/** 2台が ball ポートで接続されているか */
+export function areConnected(a: PlacedDevice, b: PlacedDevice): boolean {
+  for (const ap of ballPorts(a)) {
+    for (const bp of ballPorts(b)) {
+      if (ap.role === bp.role) continue;
+      if (linked(a, ap.portId, b, bp.portId)) return true;
+    }
   }
-  return best?.id ?? null;
+  return false;
+}
+
+/**
+ * 外形の重なり。ただし接続している2台は除外する。
+ * 発射機の ball_out（z=0.65）は外形（奥行き1.4の半分＝0.7）の内側にあるため、つなぐと必ずわずかに重なる（SPEC_GAPS G-18）。
+ */
+export function conflicts(a: PlacedDevice, b: PlacedDevice): boolean {
+  return overlaps(a, b) && !areConnected(a, b);
 }
 
 function problemOf(device: PlacedDevice, others: readonly PlacedDevice[]): PlacementProblem | undefined {
@@ -137,7 +167,7 @@ function problemOf(device: PlacedDevice, others: readonly PlacedDevice[]): Place
   if (device.position[1] > PLACEMENT.maxHeight + 1e-9) return 'too_high';
   const { min, max } = PLACEMENT.bounds;
   if (f.minX < min - 1e-9 || f.maxX > max + 1e-9 || f.minZ < min - 1e-9 || f.maxZ > max + 1e-9) return 'out_of_bounds';
-  if (others.some((o) => overlaps(device, o))) return 'overlap';
+  if (others.some((o) => conflicts(device, o))) return 'overlap';
   return undefined;
 }
 
@@ -158,11 +188,11 @@ export function evaluateMove(moving: PlacedDevice, desiredX: number, desiredZ: n
   const candidates: Candidate[] = [];
   let hint: { text: string; dist: number } | undefined;
 
+  const pairs = (o: PlacedDevice) =>
+    ballPorts(moving).flatMap((m) => ballPorts(o).filter((t) => t.role !== m.role).map((t) => [m.portId, t.portId] as const));
+
   for (const o of others) {
-    for (const [mine, theirs] of [
-      ['ball_in', 'ball_out'],
-      ['ball_out', 'ball_in'],
-    ] as const) {
+    for (const [mine, theirs] of pairs(o)) {
       const target = portWorldPosition(o, theirs);
       // 回転は動かしている装置のまま、ポートが target に来る位置を求める
       const local = portWorldPosition({ ...moving, position: [0, 0, 0] }, mine);

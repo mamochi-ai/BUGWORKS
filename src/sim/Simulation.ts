@@ -2,9 +2,9 @@ import type { Rapier } from './rapier';
 import type { Vec3 } from './catalog';
 import { GRAVITY, PHYSICS_DT } from './constants';
 import { buildLabBoxes, type LabBox } from './lab';
-import { chooseBallStart } from '../edit/placement';
-import { BALL_START_OFFSET, type SliceLayout } from './layout';
-import { BALL_RADIUS, RAIL_PROFILE, ballRestPosition, buildRailTrack, type RailTrack } from './railGeometry';
+import { LAUNCHER_SHAPE, MAX_BALLS, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
+import type { SliceLayout } from './layout';
+import { BALL_RADIUS, RAIL_PROFILE, buildRailTrack, type RailTrack } from './railGeometry';
 
 type World = InstanceType<Rapier['World']>;
 type RigidBody = ReturnType<World['createRigidBody']>;
@@ -18,13 +18,39 @@ export interface BallState {
   angvel: Vec3;
 }
 
-export interface SimSnapshot {
-  tick: number;
-  ball: BallState;
-  outOfBounds: boolean;
+export interface BallSnapshot extends BallState {
+  /** 発射された順の通し番号（同じ配置・同じtickなら毎回同じ） */
+  id: number;
 }
 
-/** これより下に落ちた鉄球は場外として凍結する（試作値） */
+export interface LauncherState {
+  deviceId: string;
+  /** 次に発射を試みる tick */
+  nextFireTick: number;
+  /** 最後に撃った tick（まだ撃っていなければ null） */
+  lastFireTick: number | null;
+  /** 装填中の球の id（無ければ null） */
+  loadedBallId: number | null;
+  /** 発射を見送っている理由：球の上限 / 装填が間に合っていない */
+  waiting: 'max_balls' | 'loading' | null;
+  /** 見送りが始まった tick */
+  waitingSince: number | null;
+}
+
+export interface SimSnapshot {
+  tick: number;
+  balls: BallSnapshot[];
+  launchers: LauncherState[];
+  /** 場外に落ちて取り除いた球の数 */
+  lostBalls: number;
+}
+
+/** レール・溝の底板の角の丸め（m）。継ぎ目での引っかかり防止。試作値 */
+const PLATE_EDGE_ROUNDING = 0.01;
+/** レールの当たり判定の入口側を下げる量（m）。継ぎ目を必ず下りの段差にする。試作値（DECISIONS.md D-20） */
+export const JOINT_DROP = 0.005;
+
+/** これより下に落ちた鉄球は場外として取り除く（試作値） */
 export const KILL_PLANE_Y = -5;
 
 /** 物理材質（試作値、端末実測で調整 → physicsProfile を更新） */
@@ -46,10 +72,11 @@ export class Simulation {
   private _tracks: RailTrack[] = [];
   readonly labBoxes: LabBox[];
   private world!: World;
-  private ball!: RigidBody;
+  private balls: { id: number; body: RigidBody; prev: BallState }[] = [];
+  private launchers: (LauncherPlan & LauncherState)[] = [];
+  private nextBallId = 0;
   private _tick = 0;
-  private _outOfBounds = false;
-  private prev!: BallState;
+  private _lostBalls = 0;
 
   constructor(
     private readonly R: Rapier,
@@ -88,19 +115,51 @@ export class Simulation {
     return this._tick * PHYSICS_DT;
   }
 
-  get outOfBounds(): boolean {
-    return this._outOfBounds;
+  get lostBalls(): number {
+    return this._lostBalls;
   }
 
+  get ballCount(): number {
+    return this.balls.length;
+  }
+
+  /**
+   * 発射を見送っている発射機があれば、その理由（HUD表示用）。
+   * 装填待ちは発射間隔が短いと毎回起きるので、2周期以上続いたときだけ知らせる。
+   */
+  get launcherWaiting(): LauncherState['waiting'] {
+    if (this.launchers.some((l) => l.waiting === 'max_balls')) return 'max_balls';
+    const stuck = this.launchers.some(
+      (l) => l.waiting === 'loading' && l.waitingSince !== null && this._tick - l.waitingSince >= 2 * l.periodTicks,
+    );
+    return stuck ? 'loading' : null;
+  }
+
+  get launcherPlans(): readonly LauncherPlan[] {
+    return this.launchers;
+  }
+
+  /**
+   * 1 tick 進める。順序は固定：①前tickの状態を記録 ②発射機ごとに（配置順）発射→次の球の装填 ③物理 ④場外の球を除去。
+   */
   step(): void {
-    this.prev = this.readBall();
-    if (!this._outOfBounds) {
-      this.world.step();
-      if (this.ball.translation().y < KILL_PLANE_Y) {
-        this._outOfBounds = true;
-        this.ball.setLinvel({ x: 0, y: 0, z: 0 }, false);
-        this.ball.setAngvel({ x: 0, y: 0, z: 0 }, false);
-        this.ball.setBodyType(this.R.RigidBodyType.Fixed, false);
+    for (const b of this.balls) b.prev = readBody(b.body);
+    for (const l of this.launchers) {
+      if (this._tick >= l.nextFireTick) {
+        l.nextFireTick += l.periodTicks;
+        this.fire(l);
+      }
+      const reloadReady = l.lastFireTick === null || this._tick - l.lastFireTick >= l.reloadTicks;
+      if (l.loadedBallId === null && reloadReady) this.load(l, l.hopperPoint);
+    }
+    this.world.step();
+    for (let i = this.balls.length - 1; i >= 0; i--) {
+      const b = this.balls[i];
+      if (b.body.translation().y < KILL_PLANE_Y) {
+        for (const l of this.launchers) if (l.loadedBallId === b.id) l.loadedBallId = null;
+        this.world.removeRigidBody(b.body);
+        this.balls.splice(i, 1);
+        this._lostBalls++;
       }
     }
     this._tick++;
@@ -111,27 +170,87 @@ export class Simulation {
     this.build();
   }
 
-  /** 現tickの鉄球状態 */
-  readBall(): BallState {
-    const t = this.ball.translation();
-    const r = this.ball.rotation();
-    const v = this.ball.linvel();
-    const w = this.ball.angvel();
-    return {
-      position: [t.x, t.y, t.z],
-      rotation: [r.x, r.y, r.z, r.w],
-      linvel: [v.x, v.y, v.z],
-      angvel: [w.x, w.y, w.z],
-    };
+  /** 現tickの鉄球（発射順） */
+  readBalls(): BallSnapshot[] {
+    return this.balls.map((b) => ({ id: b.id, ...readBody(b.body) }));
   }
 
-  /** 1tick前の鉄球状態（描画補間用） */
-  readPrevBall(): BallState {
-    return this.prev;
+  /** 描画補間用：各球の 1tick 前と現在 */
+  readBallFrames(): { id: number; prev: BallState; curr: BallState }[] {
+    return this.balls.map((b) => ({ id: b.id, prev: b.prev, curr: readBody(b.body) }));
+  }
+
+  /** 描画用：発射機ごとの次の発射 tick と間隔 */
+  snapshotLaunchers(): { deviceId: string; lastFireTick: number | null }[] {
+    return this.launchers.map((l) => ({ deviceId: l.deviceId, lastFireTick: l.lastFireTick }));
   }
 
   snapshot(): SimSnapshot {
-    return { tick: this._tick, ball: this.readBall(), outOfBounds: this._outOfBounds };
+    return {
+      tick: this._tick,
+      balls: this.readBalls(),
+      launchers: this.launchers.map((l) => ({
+        deviceId: l.deviceId,
+        nextFireTick: l.nextFireTick,
+        lastFireTick: l.lastFireTick,
+        loadedBallId: l.loadedBallId,
+        waiting: l.waiting,
+        waitingSince: l.waitingSince,
+      })),
+      lostBalls: this._lostBalls,
+    };
+  }
+
+  /** 装填済みで溝の上に落ち着いている球を押し出す。無ければ理由を記録して見送る */
+  private fire(l: LauncherPlan & LauncherState): void {
+    const loaded = this.balls.find((b) => b.id === l.loadedBallId);
+    const settled =
+      loaded !== undefined &&
+      (() => {
+        const p = loaded.body.translation();
+        return Math.hypot(p.x - l.loadPoint[0], p.y - l.loadPoint[1], p.z - l.loadPoint[2]) < 0.03;
+      })();
+    if (!loaded || !settled) {
+      l.waiting = !loaded && this.balls.length >= MAX_BALLS ? 'max_balls' : 'loading';
+      l.waitingSince ??= this._tick;
+      return;
+    }
+    loaded.body.setLinvel({ x: l.velocity[0], y: l.velocity[1], z: l.velocity[2] }, true);
+    loaded.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    l.loadedBallId = null;
+    l.lastFireTick = this._tick;
+    l.waiting = null;
+    l.waitingSince = null;
+  }
+
+  /** 次の球を装填する（上限や、置き場所に他の球があるときは見送る） */
+  private load(l: LauncherPlan & LauncherState, at: Vec3): void {
+    if (this.balls.length >= MAX_BALLS) return;
+    // 置き場所の周りに球があれば重ねて生成しない（物理が破綻するため）
+    for (const b of this.balls) {
+      const p = b.body.translation();
+      for (const q of [at, l.loadPoint]) {
+        if (Math.hypot(p.x - q[0], p.y - q[1], p.z - q[2]) < BALL_RADIUS * 2.05) return;
+      }
+    }
+    const R = this.R;
+    const body = this.world.createRigidBody(
+      R.RigidBodyDesc.dynamic()
+        .setTranslation(...at)
+        .setAngularDamping(MATERIAL.ballAngularDamping)
+        .setCcdEnabled(true)
+        .setCanSleep(false),
+    );
+    this.world.createCollider(
+      R.ColliderDesc.ball(BALL_RADIUS)
+        .setDensity(MATERIAL.ballDensity)
+        .setFriction(MATERIAL.ballFriction)
+        .setRestitution(MATERIAL.ballRestitution),
+      body,
+    );
+    const id = this.nextBallId++;
+    this.balls.push({ id, body, prev: readBody(body) });
+    l.loadedBallId = id;
   }
 
   dispose(): void {
@@ -144,7 +263,10 @@ export class Simulation {
     world.timestep = PHYSICS_DT;
     this.world = world;
     this._tick = 0;
-    this._outOfBounds = false;
+    this._lostBalls = 0;
+    this.balls = [];
+    this.launchers = [];
+    this.nextBallId = 0;
 
     for (const box of this.labBoxes) {
       const body = world.createRigidBody(
@@ -160,48 +282,71 @@ export class Simulation {
 
     for (const track of this.tracks) this.addRailColliders(track);
 
-    // 発射機ができるまでの暫定：つながっていない入口のうち最も高いレールに置く（DECISIONS.md D-16）
-    const startId = chooseBallStart(this._layout.devices);
-    const start = this._tracks.find((t) => t.deviceId === startId);
-    const p: Vec3 = start ? ballRestPosition(start, BALL_START_OFFSET) : [0, BALL_RADIUS, 0];
-    this.ball = world.createRigidBody(
-      R.RigidBodyDesc.dynamic()
-        .setTranslation(...p)
-        .setAngularDamping(MATERIAL.ballAngularDamping)
-        .setCcdEnabled(true)
-        .setCanSleep(false),
-    );
-    world.createCollider(
-      R.ColliderDesc.ball(BALL_RADIUS)
-        .setDensity(MATERIAL.ballDensity)
-        .setFriction(MATERIAL.ballFriction)
-        .setRestitution(MATERIAL.ballRestitution),
-      this.ball,
-    );
-    this.prev = this.readBall();
+    for (const d of this._layout.devices) {
+      if (d.type !== 'launcher') continue;
+      const yaw = (d.rotationYDeg * Math.PI) / 180;
+      const S = LAUNCHER_SHAPE;
+      const base = world.createRigidBody(
+        R.RigidBodyDesc.fixed()
+          .setTranslation(...launcherToWorld(d, S.base.center))
+          .setRotation(quatFromYawPitch(yaw, 0)),
+      );
+      const [sx, sy, sz] = S.base.size;
+      world.createCollider(R.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2).setFriction(MATERIAL.floorFriction), base);
+      // 溝（レールと同じ断面）＋後ろ壁
+      const len = S.frontZ - S.backZ;
+      const chute = world.createRigidBody(
+        R.RigidBodyDesc.fixed()
+          .setTranslation(...launcherToWorld(d, [0, S.surfaceY, (S.frontZ + S.backZ) / 2]))
+          .setRotation(quatFromYawPitch(yaw, 0)),
+      );
+      railParts(len).forEach((part, i) => world.createCollider(this.trackPartDesc(part, i === 0), chute));
+      const halfW = RAIL_PROFILE.innerWidth / 2 + RAIL_PROFILE.wallThickness;
+      world.createCollider(R.ColliderDesc.cuboid(halfW, 0.08, 0.02).setTranslation(0, 0.04, -len / 2 - 0.02), chute);
+
+      // 最初の球は装填済み（初期状態で溝の上に見える）。最初の発射は再生した瞬間（tick 0）
+      const runtime = {
+        ...planLauncher(d, this._layout.devices),
+        nextFireTick: 0,
+        lastFireTick: null,
+        loadedBallId: null,
+        waiting: null,
+        waitingSince: null,
+      };
+      this.launchers.push(runtime);
+      this.load(runtime, runtime.loadPoint);
+    }
+  }
+
+  /**
+   * レール・溝の部品の当たり判定。底板は角を丸めた箱にする：
+   * 別々の箱がつながる継ぎ目で、球が次の箱の角に引っかかって跳ね上がるのを防ぐ（外形は同じ）。
+   */
+  private trackPartDesc(part: RailPart, isPlate: boolean) {
+    const R = this.R;
+    const [hx, hy, hz] = part.half;
+    const b = PLATE_EDGE_ROUNDING;
+    const desc = isPlate ? R.ColliderDesc.roundCuboid(hx - b, hy - b, hz - b, b) : R.ColliderDesc.cuboid(hx, hy, hz);
+    return desc.setTranslation(...part.offset).setFriction(MATERIAL.railFriction);
   }
 
   /** レール＝底板＋左右の側壁。走行面（底板上面）がポートを結ぶ線分を通る */
   private addRailColliders(track: RailTrack): void {
     const R = this.R;
-    const mid: Vec3 = [
-      (track.start[0] + track.end[0]) / 2,
-      (track.start[1] + track.end[1]) / 2,
-      (track.start[2] + track.end[2]) / 2,
-    ];
+    // 入口側だけ JOINT_DROP 下げる：前の溝/レールの終わり（ポートの高さ）から必ずわずかに「下る」段差になり、
+    // 球が次のレールの角に当たって跳ね上がらない（出口側はポートの高さのまま）
+    const start: Vec3 = [track.start[0], track.start[1] - JOINT_DROP, track.start[2]];
+    const end = track.end;
+    const mid: Vec3 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2, (start[2] + end[2]) / 2];
+    const horiz = Math.hypot(end[0] - start[0], end[2] - start[2]);
+    const pitch = Math.atan2(start[1] - end[1], horiz);
+    const length = Math.hypot(horiz, end[1] - start[1]);
     const body = this.world.createRigidBody(
       R.RigidBodyDesc.fixed()
         .setTranslation(...mid)
-        .setRotation(quatFromYawPitch(track.yawRad, track.pitch)),
+        .setRotation(quatFromYawPitch(track.yawRad, pitch)),
     );
-    for (const part of railParts(track.length)) {
-      this.world.createCollider(
-        R.ColliderDesc.cuboid(part.half[0], part.half[1], part.half[2])
-          .setTranslation(...part.offset)
-          .setFriction(MATERIAL.railFriction),
-        body,
-      );
-    }
+    railParts(length).forEach((part, i) => this.world.createCollider(this.trackPartDesc(part, i === 0), body));
   }
 }
 
@@ -232,4 +377,17 @@ export function quatFromYawPitch(yaw: number, pitch: number): { x: number; y: nu
   const cp = Math.cos(pitch / 2);
   const sp = Math.sin(pitch / 2);
   return { x: cy * sp, y: sy * cp, z: -sy * sp, w: cy * cp };
+}
+
+function readBody(body: RigidBody): BallState {
+  const t = body.translation();
+  const r = body.rotation();
+  const v = body.linvel();
+  const w = body.angvel();
+  return {
+    position: [t.x, t.y, t.z],
+    rotation: [r.x, r.y, r.z, r.w],
+    linvel: [v.x, v.y, v.z],
+    angvel: [w.x, w.y, w.z],
+  };
 }

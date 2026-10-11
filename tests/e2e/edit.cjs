@@ -18,14 +18,19 @@ const out = process.argv[2] || '.';
   };
   // ワールド座標→画面座標
   const screen = (v) => p.evaluate((v) => { const { rig } = window.__bugworks; const c = rig.camera; c.updateMatrixWorld(); const V = c.position.constructor; const w = new V(...v).project(c); const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left + (w.x+1)/2*r.width, r.top + (1-w.y)/2*r.height]; }, v);
-  const state = () => p.evaluate(() => { const { editor, ctl, sim, rig } = window.__bugworks; return { n: editor.devices.length, sel: editor.selectedId, msg: editor.message?.text, conns: editor.connections().map(c => c.from.deviceId + '>' + c.to.deviceId), state: ctl.state, ball: sim.readBall().position.map(v => +v.toFixed(2)), cam: rig.camera.position.toArray().map(v => +v.toFixed(2)) }; });
+  const state = () => p.evaluate(() => { const { editor, ctl, sim, rig } = window.__bugworks; const b0 = sim.readBalls()[0]; return { n: editor.devices.length, sel: editor.selectedId, msg: editor.message?.text, conns: editor.connections().map(c => c.from.deviceId + '>' + c.to.deviceId), state: ctl.state, balls: sim.ballCount, ball: b0 ? b0.position.map(v => +v.toFixed(2)) : null, cam: rig.camera.position.toArray().map(v => +v.toFixed(2)) }; });
   const fix = (pos, tgt) => p.evaluate(([pos,tgt]) => { const r = window.__bugworks.rig; r.controls.enableDamping = false; r.camera.position.set(...pos); r.controls.target.set(...tgt); r.controls.update(); }, [pos,tgt]);
 
   await fix([7, 9, 3], [1.5, 0, -1]);
   await p.waitForTimeout(300);
   console.log('0 initial', await state());
 
-  // 1) パレットからレールを追加
+  // 1) rail_3 をタップして削除し、パレットからレールを追加
+  const r3pt = await screen([0, 0.3, 2]);
+  await touch('touchStart', [r3pt]); await touch('touchEnd', []); await p.waitForTimeout(300);
+  await p.getByRole('button', { name: '削除' }).tap();
+  await p.waitForTimeout(300);
+  console.log('1a deleted', (await state()).msg);
   await p.getByRole('button', { name: '＋ レール' }).tap();
   await p.waitForTimeout(300);
   let s = await state(); console.log('1 added', s);
@@ -38,20 +43,19 @@ const out = process.argv[2] || '.';
   s = await state(); console.log('2 empty drag: camera moved', JSON.stringify(camBefore) !== JSON.stringify(s.cam), 'devices same', s.n);
   await fix([7, 9, 3], [1.5, 0, -1]); await p.waitForTimeout(300);
 
-  // 3) 新しいレールを1本指でドラッグし、rail_1 の入口（z=-3）の手前へ → 吸着して接続
+  // 3) 新しいレールを1本指でドラッグし、rail_2 の出口（z=1）の先へ → 吸着して接続
   const from = await screen([pos[0], pos[1] + 0.3, pos[2]]);
-  console.log('rail_4 at', pos, 'from', from.map(Math.round));
-  const to = await screen([0.2, 0, -4.1]);
+  console.log('new rail at', pos, 'from', from.map(Math.round));
+  const to = await screen([0.15, 0, 2.1]);
   const camB = (await state()).cam;
   await drag(from, to, 16);
   s = await state(); console.log('3 dragged', s, 'camera unchanged', JSON.stringify(camB) === JSON.stringify(s.cam));
   await p.screenshot({ path: out + '/edit_snapped.png' });
 
-  // 4) 再生すると鉄球は新しいレールから出発する
-  const startBall = s.ball;
+  // 4) 再生すると発射機から球が出る
   await p.getByRole('button', { name: '再生', exact: true }).tap();
-  await p.waitForTimeout(3000);
-  s = await state(); console.log('4 running from', startBall, '->', s.ball, s.state);
+  await p.waitForTimeout(4000);
+  s = await state(); console.log('4 running', s.state, 'balls', s.balls, 'first', s.ball);
 
   // 5) 実行中にレールに触れるとリセットされ編集できる。回転→元に戻す
   const r3 = await screen([0, 0.3, 2]);

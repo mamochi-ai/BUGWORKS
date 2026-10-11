@@ -1,6 +1,6 @@
 # BUGWORKS — 縦切り試作（Vertical Slice）
 
-3D物理工作パズル **BUGWORKS** のWeb先行試作です。マスター仕様 §10 の手順 1「研究所の床＋自由カメラ＋レール＋鉄球1個＋再生/停止/リセット」**のみ** を実装しています。
+3D物理工作パズル **BUGWORKS** のWeb先行試作です。研究所の床・自由カメラ・レールと鉄球発射機の配置/接続・再生/停止/リセットまでを実装しています。マスター仕様 §10 の手順 1「研究所の床＋自由カメラ＋レール＋鉄球1個＋再生/停止/リセット」**のみ** を実装しています。
 
 > 隠しバグ・永久機関認定・装置配置・設計図保存は **未実装** です（`TODO.md`）。
 > サーバー / SNS / オンラインランキング / クラウド共有は実装しません（仕様上の対象外）。
@@ -42,6 +42,7 @@ npm run dev        # http://localhost:5173/ （--host 付きなので同一LAN�
 ```
 src/
   sim/        物理（描画・DOMに非依存。Nodeでテスト可能）
+    launcher.ts             鉄球発射機（溝・ばね・装填口の形、発射と装填のルール、球の上限）
     constants.ts            120Hz 固定刻み（検証設定JSONから取得）
     FixedStepClock.ts       可変フレーム → 固定tick 変換（アキュムレータ）
     Simulation.ts           Rapier ワールド。step()=1tick、reset()=同レイアウトから再構築
@@ -55,7 +56,8 @@ src/
   edit/EditorModel.ts       配置の編集と元に戻す/やり直し
   input/PartDragController.ts 部品ドラッグと視点操作の振り分け
   ui/EditPanel.ts           装置パレットと選択中の部品の操作
-  render/RailLayer.ts       配置に追従するレール描画（ポートの輪、選択枠）
+  render/DeviceLayer.ts     配置に追従する装置の描画（ポートの輪、選択枠、発射機のばね）
+  render/LauncherModel.ts   鉄球発射機の見た目（ばねと押し板の動き、装填口。描画専用）
   render/RailModel.ts       レールの見た目（鋼管＋オレンジ金具＋支柱。描画専用、当たり判定は箱のまま）
   input/CameraRig.ts        自由カメラ（OrbitControls をタッチ優先で設定）
   ui/Hud.ts, style.css      HTMLテキストのUI（画像UIシートは使わない）
