@@ -4,7 +4,7 @@ import { PHYSICS_HZ } from '../src/sim/constants';
 import type { PlacedDevice } from '../src/sim/layout';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
-import { STAGES, type StageDef } from '../src/stage/stages';
+import { STAGES, unlockState, type StageDef } from '../src/stage/stages';
 
 const playable = STAGES.filter((s) => !s.comingSoon);
 
@@ -120,5 +120,25 @@ describe('ステージ中の編集の制限', () => {
     m.startFree([], 'free');
     expect(m.inStage).toBe(false);
     expect(m.remaining('spring')).toBe(Infinity);
+  });
+});
+
+describe('アンロック順（順番に解放, D-27）', () => {
+  it('最初は 1-1 だけ遊べる。ロック中は理由が出る', () => {
+    expect(unlockState('1-1', []).unlocked).toBe(true);
+    for (const id of ['1-2', '1-3', '1-4', '1-5']) expect(unlockState(id, []).unlocked).toBe(false);
+    expect(unlockState('1-2', []).reason).toBe('1-1「はじめの一歩」をクリアすると遊べます');
+  });
+
+  it('ひとつ前をクリアすると次が開く（飛ばして開くことはない）', () => {
+    expect(unlockState('1-2', ['1-1']).unlocked).toBe(true);
+    expect(unlockState('1-3', ['1-1']).unlocked).toBe(false);
+    expect(unlockState('1-4', ['1-1', '1-2', '1-3']).unlocked).toBe(true);
+    // 前のステージの記録が無ければ、後ろだけクリア済みでも開かない
+    expect(unlockState('1-3', ['1-2']).unlocked).toBe(false);
+  });
+
+  it('無いステージは遊べない', () => {
+    expect(unlockState('9-9', ['1-1']).unlocked).toBe(false);
   });
 });

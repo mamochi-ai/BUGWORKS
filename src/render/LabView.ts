@@ -6,6 +6,7 @@ import { plungerCompression } from '../sim/launcher';
 import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
 import { DeviceLayer } from './DeviceLayer';
+import { buildLabEnvironment } from './LabEnvironment';
 
 /**
  * 物理状態を読むだけの描画層。物理ワールドへは書き込まない。
@@ -113,11 +114,10 @@ export class LabView {
   }
 
   private addLab(): void {
-    const mats = {
-      floor: new THREE.MeshStandardMaterial({ color: PALETTE.floor, roughness: 0.85, metalness: 0.3 }),
-      wall: new THREE.MeshStandardMaterial({ color: PALETTE.wall, roughness: 0.9, metalness: 0.2 }),
-      curb: new THREE.MeshStandardMaterial({ color: PALETTE.curb, roughness: 0.7, metalness: 0.4 }),
-    };
+    // 床の模様・壁の飾り・背景の小物（描画専用, D-28）
+    const env = buildLabEnvironment(this.sim.labBoxes);
+    this.scene.add(env.root);
+    const mats = env.materials;
     for (const box of this.sim.labBoxes) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(...box.size), mats[box.kind]);
       mesh.position.set(...box.center);
@@ -131,9 +131,12 @@ export class LabView {
     // 0.25m 配置グリッド（devices.v0.1.json gridSize）と 4m モジュール境界
     const minor = new THREE.GridHelper(12, 48, PALETTE.gridMinor, PALETTE.gridMinor);
     minor.position.y = 0.002;
+    // 床の模様と重なるので細かいグリッドは控えめに
+    (minor.material as THREE.Material).opacity = 0.35;
+    (minor.material as THREE.Material).transparent = true;
     const module = new THREE.GridHelper(12, 3, PALETTE.gridModule, PALETTE.gridModule);
     module.position.y = 0.004;
-    (module.material as THREE.Material).opacity = 0.6;
+    (module.material as THREE.Material).opacity = 0.35;
     (module.material as THREE.Material).transparent = true;
     this.scene.add(minor, module);
   }
