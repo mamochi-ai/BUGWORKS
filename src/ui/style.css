@@ -81,7 +81,7 @@ html, body {
 /* 装置パレット・編集パネル */
 .edit {
   position: absolute; left: max(12px, env(safe-area-inset-left)); top: calc(max(12px, env(safe-area-inset-top)) + 64px);
-  width: 216px; display: flex; flex-direction: column; gap: 8px;
+  width: 216px; max-height: calc(100% - 180px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px;
 }
 .edit h2 { margin: 0; font-size: 13px; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
@@ -98,6 +98,14 @@ html, body {
 .edit button:not(:disabled):active { background: #30363e; }
 .edit button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
 .edit button.add { border-color: var(--orange); color: var(--orange); }
+.edit [hidden] { display: none; }
+.edit .params { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.edit .params h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+.edit .param-row { display: grid; grid-template-columns: 1fr 44px 64px 44px; align-items: center; gap: 4px; }
+.edit .param-row .param-label { font-size: 12.5px; color: var(--text); }
+.edit .param-row button { min-height: 44px; padding: 0; font-size: 20px; color: var(--cyan); border-color: var(--cyan); }
+.edit .param-row output { text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700; }
+.edit .param-row small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
 .edit .sel { font-size: 12.5px; color: var(--muted); line-height: 1.45; min-height: 2.9em; }
 .edit .msg { margin: 0; font-size: 12.5px; line-height: 1.45; min-height: 2.9em; }
 .edit .msg[data-kind='error'] { color: #ff8a7a; }

@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { getDeviceDef } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
-import { LAUNCHER_SHAPE } from '../sim/launcher';
+import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, chuteLocal, hopperLocal } from '../sim/launcher';
 import { railParts } from '../sim/Simulation';
 import type { RailMaterials } from './RailModel';
+import { addLegs } from './SpringModel';
 
 /**
  * 鉄球発射機の見た目（試作）。デザイン画 launcher_base / launcher_arm / coil_spring を参考に組む。
@@ -31,7 +32,8 @@ export class LauncherModelFactory {
 
   constructor(private readonly mats: RailMaterials) {}
 
-  create(device: PlacedDevice): THREE.Group {
+  /** angle：溝の角度（rad）。レールにつながっていれば 0（planLauncher が決める） */
+  create(device: PlacedDevice, angle: number): THREE.Group {
     const S = LAUNCHER_SHAPE;
     const g = new THREE.Group();
     g.position.set(...device.position);
@@ -60,10 +62,14 @@ export class LauncherModelFactory {
     ring.position.set(0, plateTop + 0.04, bz);
     g.add(disc, ring);
 
-    // 溝：レールと同じ断面（底板＋側壁）。走行面 = ball_out の高さ
-    const len = S.frontZ - S.backZ;
+    // 溝の組（溝・金具・ばね・押し板）：原点＝溝の後端（軸）、ローカル z＝溝に沿った距離。angle だけ上へ傾く
+    const len = CHUTE_LENGTH;
+    const assembly = new THREE.Group();
+    assembly.name = 'launcher_chute';
+    assembly.position.set(0, S.surfaceY, S.backZ);
+    assembly.rotation.x = -angle;
     const chute = new THREE.Group();
-    chute.position.set(0, S.surfaceY, (S.frontZ + S.backZ) / 2);
+    chute.position.z = len / 2;
     railParts(len).forEach((part, i) => {
       const geo = new THREE.BoxGeometry(part.half[0] * 2, part.half[1] * 2, part.half[2] * 2);
       geo.userData.ownedByDevice = true;
@@ -81,40 +87,44 @@ export class LauncherModelFactory {
         chute.add(br, be);
       }
     }
-    // 後ろ壁
+    assembly.add(chute);
+    // 後ろ壁（ばねの受け）
     const back = new THREE.Mesh(new RoundedBoxGeometry(0.38, 0.2, 0.05, 2, 0.01), this.mats.paint);
     back.geometry.userData.ownedByDevice = true;
-    back.position.set(0, 0.06, -len / 2 - 0.025);
-    chute.add(back);
-    g.add(chute);
-
-    // 溝を支える柱
-    for (const z of [S.backZ + 0.15, S.frontZ - 0.2]) {
-      const h = S.surfaceY - 0.04 - plateTop;
-      const strut = new THREE.Mesh(this.geo.strut, this.mats.dark);
-      strut.scale.y = h;
-      strut.position.set(0, plateTop + h / 2, z);
-      g.add(strut);
-    }
-
+    back.position.set(0, 0.06, -0.025);
     // 横向きのばねと押し板（setPlunger で動かす）
     const spring = new THREE.Mesh(this.geo.spring, this.mats.steel);
     spring.name = 'launcher_spring';
-    spring.position.set(0, S.surfaceY + 0.06, S.backZ);
+    spring.position.set(0, 0.06, 0);
     const plunger = new THREE.Mesh(this.geo.plunger, this.mats.paint);
     plunger.name = 'launcher_plunger';
-    plunger.position.set(0, S.surfaceY + 0.06, S.plungerRetractedZ - 0.02);
-    g.add(spring, plunger);
+    plunger.position.set(0, 0.06, CHUTE_STOP_D - 0.02);
+    assembly.add(back, spring, plunger);
+    g.add(assembly);
+
+    // 溝を支える柱（台座から溝の下面まで）
+    for (const d of [0.15, len - 0.2]) {
+      const top = chuteLocal(angle, d, -0.04);
+      const h = top[1] - plateTop;
+      const strut = new THREE.Mesh(this.geo.strut, this.mats.dark);
+      strut.scale.y = h;
+      strut.position.set(0, plateTop + h / 2, top[2]);
+      g.add(strut);
+    }
 
     // 装填口（漏斗）：装填位置の真上
+    const hp = hopperLocal(angle);
     const hopper = new THREE.Mesh(this.geo.hopper, this.mats.dark);
-    hopper.position.set(0, S.surfaceY + S.hopperDrop + 0.02, S.loadZ);
+    hopper.position.set(0, hp[1] + 0.02, hp[2]);
     const rim = new THREE.Mesh(this.geo.hopperRim, this.mats.paint);
-    rim.position.set(0, S.surfaceY + S.hopperDrop + 0.08, S.loadZ);
+    rim.position.set(0, hp[1] + 0.08, hp[2]);
+    const neckH = S.hopperDrop - 0.05;
     const neck = new THREE.Mesh(this.geo.strut, this.mats.dark);
-    neck.scale.set(0.6, S.hopperDrop - 0.05, 0.6);
-    neck.position.set(-0.19, S.surfaceY + (S.hopperDrop - 0.05) / 2 + 0.05, S.loadZ);
+    neck.scale.set(0.6, neckH, 0.6);
+    neck.position.set(-0.19, hp[1] - neckH / 2, hp[2]);
     g.add(hopper, rim, neck);
+
+    addLegs(g, device.position[1], bw / 2 - 0.13, bd / 2 - 0.13 + 0.0, this.mats);
 
     // タッチ用の当たり判定（描画しない）
     const [sx, sy, sz] = getDeviceDef('launcher').size;
@@ -139,11 +149,12 @@ export class LauncherModelFactory {
   setPlunger(group: THREE.Group, compression: number): void {
     const S = LAUNCHER_SHAPE;
     const c = Math.min(1, Math.max(0, compression));
-    const face = S.plungerExtendedZ + (S.plungerRetractedZ - S.plungerExtendedZ) * c;
+    // 溝の後端から測った押し板の前面の位置
+    const face = S.plungerExtendedZ + (S.plungerRetractedZ - S.plungerExtendedZ) * c - S.backZ;
     const plunger = group.getObjectByName('launcher_plunger');
     const spring = group.getObjectByName('launcher_spring');
     if (plunger) plunger.position.z = face - 0.02;
-    if (spring) spring.scale.z = Math.max(0.01, face - 0.04 - S.backZ);
+    if (spring) spring.scale.z = Math.max(0.01, face - 0.04);
   }
 }
 

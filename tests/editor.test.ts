@@ -9,12 +9,13 @@ import {
   overlaps,
 } from '../src/edit/placement';
 import { PHYSICS_HZ } from '../src/sim/constants';
-import { VERTICAL_SLICE_LAYOUT, type PlacedDevice } from '../src/sim/layout';
+import type { PlacedDevice } from '../src/sim/layout';
+import { FLOOR_CHAIN } from './fixtures';
 import { portWorldPosition } from '../src/sim/railGeometry';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
 
-const base = VERTICAL_SLICE_LAYOUT.devices;
+const base = FLOOR_CHAIN.devices;
 /** 発射機を除いたレールだけ（rail_1, rail_2, rail_3） */
 const rails = base.filter((d) => d.type === 'rail');
 const rail = (id: string, x: number, y: number, z: number, rot = 0): PlacedDevice => ({
@@ -198,7 +199,7 @@ describe('編集後の物理', () => {
   it('setLayout 後の状態は、同じ配置で新しく作ったワールドと一致する', () => {
     const m = new EditorModel(base, 404);
     m.remove('rail_1');
-    const a = new Simulation(R, VERTICAL_SLICE_LAYOUT);
+    const a = new Simulation(R, FLOOR_CHAIN);
     sims.push(a);
     for (let i = 0; i < 100; i++) a.step();
     a.setLayout(m.layout);

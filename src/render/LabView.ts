@@ -58,6 +58,7 @@ export class LabView {
   /** alpha: 前tick→現tickの補間係数（描画は可変FPS、物理は固定120Hz） */
   render(camera: THREE.Camera, alpha: number): void {
     this.devices.setLauncherCharge(launcherCharge(this.sim));
+    this.devices.setSpringCompression(new Map(this.sim.springCompressions().map((s) => [s.deviceId, s.offset])));
     const frames = this.sim.readBallFrames();
     while (this.ballPool.length < frames.length) {
       const m = new THREE.Mesh(this.ballGeo, this.ballMat);

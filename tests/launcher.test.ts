@@ -1,12 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PHYSICS_HZ } from '../src/sim/constants';
 import { LAUNCHER_SHAPE, MAX_BALLS, RELOAD_SECONDS, launcherParams, planLauncher, plungerCompression } from '../src/sim/launcher';
-import { VERTICAL_SLICE_LAYOUT, type PlacedDevice } from '../src/sim/layout';
+import type { PlacedDevice } from '../src/sim/layout';
+import { FLOOR_CHAIN } from './fixtures';
 import { BALL_RADIUS, buildRailTrack, portWorldPosition } from '../src/sim/railGeometry';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
 
-const base = VERTICAL_SLICE_LAYOUT.devices;
+const base = FLOOR_CHAIN.devices;
 const launcher = base.find((d) => d.type === 'launcher')!;
 const lone = (params?: Record<string, number>): PlacedDevice => ({ id: 'L', type: 'launcher', position: [0, 0, 0], rotationYDeg: 0, params });
 
@@ -29,10 +30,19 @@ describe('発射機の形と発射の計画（物理なし）', () => {
     expect(S.plungerExtendedZ).toBeGreaterThan(S.plungerRetractedZ);
   });
 
-  it('溝の向き（前方・水平）に launchSpeed で押し出す。回すと向きも回る', () => {
-    expect(planLauncher(launcher, base).velocity).toEqual([0, 0, 5]);
-    expect(planLauncher(launcher, base).feedsRailId).toBe('rail_1');
-    const d = { ...lone(), rotationYDeg: 90 };
+  it('レールにつながっていれば溝は水平（角度は 0° に固定）で、前方へ launchSpeed', () => {
+    const plan = planLauncher(launcher, base);
+    expect(plan.angle).toBe(0);
+    plan.velocity.forEach((v, i) => expect(v).toBeCloseTo([0, 0, 5][i], 9));
+    expect(plan.feedsRailId).toBe('rail_1');
+  });
+
+  it('つながっていなければ溝が angleDegrees だけ上へ傾き、その向きに押し出す。回すと向きも回る', () => {
+    const plan = planLauncher(lone(), [lone()]);
+    expect(plan.angle).toBeCloseTo(Math.PI / 4, 9);
+    expect(plan.velocity[1]).toBeCloseTo(5 * Math.SQRT1_2, 9);
+    expect(plan.velocity[2]).toBeCloseTo(5 * Math.SQRT1_2, 9);
+    const d = { ...lone({ angleDegrees: 0 }), rotationYDeg: 90 };
     const v = planLauncher(d, [d]).velocity;
     expect(v[0]).toBeCloseTo(5, 9);
     expect(Math.abs(v[2])).toBeLessThan(1e-9);
@@ -126,12 +136,28 @@ describe('発射（物理あり）', () => {
     expect(s.launcherWaiting).toBe('loading');
   });
 
-  it('レールにつながっていない発射機の球は前へ飛び出して床に落ちる', () => {
-    const s = make([lone()]);
+  it('水平にした発射機の球は前へ飛び出して床に落ちる', () => {
+    const s = make([lone({ angleDegrees: 0 })]);
     for (let i = 0; i < PHYSICS_HZ * 1.5; i++) s.step();
     const p = ball(s, 0).position;
     expect(p[2]).toBeGreaterThan(1.5);
     expect(p[1]).toBeLessThan(0.3);
+  });
+
+  it('角度 45° の発射機：傾いた溝で止めまで転がって装填され、斜め上へ撃ち出される', () => {
+    const s = make([lone({ angleDegrees: 45 })]);
+    let maxY = 0;
+    for (let i = 0; i < PHYSICS_HZ * 1.2; i++) {
+      s.step();
+      maxY = Math.max(maxY, ball(s, 0).position[1]);
+    }
+    expect(maxY).toBeGreaterThan(1.8); // 水平（0.85m から落ちるだけ）よりはるかに高い
+    for (let i = 0; i < PHYSICS_HZ * 2; i++) s.step();
+    expect(s.snapshot().launchers[0].lastFireTick).toBeGreaterThanOrEqual(PHYSICS_HZ * 2); // 3発目まで撃てている
+  });
+
+  it('間隔を変えると発射の周期が変わる', () => {
+    expect(planLauncher(lone({ cooldownSeconds: 2.5 }), []).periodTicks).toBe(PHYSICS_HZ * 2.5);
   });
 
   it('複数の球がある状態でも、同じ配置なら全tickで一致し、リセットで初期状態に戻る', () => {

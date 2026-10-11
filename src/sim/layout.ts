@@ -17,7 +17,7 @@ export interface PlacedDevice {
   params?: Record<string, number>;
 }
 
-export type DeviceType = 'rail' | 'launcher';
+export type DeviceType = 'rail' | 'launcher' | 'spring';
 
 export interface SliceLayout {
   seed: number;
@@ -28,18 +28,21 @@ export interface SliceLayout {
 export const BALL_START_OFFSET = 0.15;
 
 /**
- * 鉄球発射機1台と、3本のレールを ball_out → ball_in で連結した下り坂。
- * レール既定値: ball_in y=0.35 / ball_out y=0.15 / 長さ2m（devices.v0.1.json）。
- * 各レールを 0.2m ずつ下げて前のレールの出口と次の入口を一致させる。
- * 北の壁との間に1本分の空きを残し、先頭の手前にもレールを足せるようにしている。
+ * 鉄球発射機1台と3本のレールを ball_out → ball_in で連結した下り坂の先に、バネ装置を置いた配置。
+ * レール既定値: ball_in y=0.35 / ball_out y=0.15 / 長さ2m（devices.v0.1.json）。各レールを 0.2m ずつ下げて連結する。
+ * バネの天板（0.65m）より高い所から球が落ちるよう、発射機とレールを 0.6m 持ち上げている（発射機は脚で支える）。
+ * 最後のレールの出口（z=3）を出た球は約0.5m先に落ちるので、バネの中心を z=3.5 に置く。
+ * 北の壁との間に1本分の空きを残している。
  */
 export const VERTICAL_SLICE_LAYOUT: SliceLayout = {
   seed: 404,
   devices: [
-    // 発射機の ball_out（y=0.75）がちょうど rail_1 の入口（0.4+0.35）に一致する
-    { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0 },
-    { id: 'rail_1', type: 'rail', position: [0, 0.4, -2], rotationYDeg: 0 },
-    { id: 'rail_2', type: 'rail', position: [0, 0.2, 0], rotationYDeg: 0 },
-    { id: 'rail_3', type: 'rail', position: [0, 0.0, 2], rotationYDeg: 0 },
+    // 発射機の ball_out（0.6+0.75）がちょうど rail_1 の入口（1.0+0.35）に一致する
+    { id: 'launcher_1', type: 'launcher', position: [0, 0.6, -3.65], rotationYDeg: 0 },
+    { id: 'rail_1', type: 'rail', position: [0, 1.0, -2], rotationYDeg: 0 },
+    { id: 'rail_2', type: 'rail', position: [0, 0.8, 0], rotationYDeg: 0 },
+    { id: 'rail_3', type: 'rail', position: [0, 0.6, 2], rotationYDeg: 0 },
+    // 天板を 15° 前へ傾け、打ち上げた球を前へ送り出す（0° だと真上に上がって同じバネに落ち続ける）
+    { id: 'spring_1', type: 'spring', position: [0, 0, 3.5], rotationYDeg: 0, params: { tiltDegrees: 15 } },
   ],
 };

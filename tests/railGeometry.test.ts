@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getDeviceDef } from '../src/sim/catalog';
-import { VERTICAL_SLICE_LAYOUT } from '../src/sim/layout';
+import { FLOOR_CHAIN } from './fixtures';
 import { buildRailTrack, portWorldPosition } from '../src/sim/railGeometry';
 
 describe('レール定義とポート', () => {
@@ -12,7 +12,7 @@ describe('レール定義とポート', () => {
   });
 
   it('縦切りレイアウトの各レールは ball_out → 次の ball_in で連結している', () => {
-    const rails = VERTICAL_SLICE_LAYOUT.devices;
+    const rails = FLOOR_CHAIN.devices;
     for (let i = 0; i + 1 < rails.length; i++) {
       const out = portWorldPosition(rails[i], 'ball_out');
       const inn = portWorldPosition(rails[i + 1], 'ball_in');

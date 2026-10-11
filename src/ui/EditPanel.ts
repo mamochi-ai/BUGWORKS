@@ -1,5 +1,7 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
+import { PARAM_SPECS, formatParam, paramValue } from '../edit/params';
+import { planLauncher } from '../sim/launcher';
 import type { SimulationController } from '../sim/SimulationController';
 
 export interface EditPanelDeps {
@@ -27,6 +29,7 @@ export class EditPanel {
       <h2>装置</h2>
       <button type="button" data-e="add-rail" class="add"><i>＋</i><span>${getDeviceDef('rail').name}</span></button>
       <button type="button" data-e="add-launcher" class="add"><i>＋</i><span>${getDeviceDef('launcher').name}</span></button>
+      <button type="button" data-e="add-spring" class="add"><i>＋</i><span>${getDeviceDef('spring').name}</span></button>
       <div class="sel" data-k="sel"></div>
       <div class="row">
         <button type="button" data-e="rotate" aria-label="回転"><i>⟳</i><span>回転</span></button>
@@ -36,6 +39,7 @@ export class EditPanel {
         <button type="button" data-e="up" aria-label="高さを上げる"><i>▲</i><span>上げる</span></button>
         <button type="button" data-e="down" aria-label="高さを下げる"><i>▼</i><span>下げる</span></button>
       </div>
+      <section class="params" data-k="params" aria-label="選択中の装置の設定" hidden></section>
       <div class="row">
         <button type="button" data-e="undo" aria-label="元に戻す"><i>↶</i><span>戻す</span></button>
         <button type="button" data-e="redo" aria-label="やり直す"><i>↷</i><span>やり直し</span></button>
@@ -63,6 +67,17 @@ export class EditPanel {
       e.preventDefault();
     });
 
+    // 設定の −/＋（行は選択のたびに作り直すので、親で受ける）
+    this.el.params.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-param]');
+      const sel = deps.editor.selected;
+      if (!b || b.disabled || !sel) return;
+      const spec = PARAM_SPECS[sel.type].find((s) => s.key === b.dataset.param);
+      if (!spec) return;
+      deps.ctl.ensureEditable();
+      deps.editor.setParam(sel.id, spec.key, paramValue(sel, spec.key) + Number(b.dataset.dir) * spec.step);
+    });
+
     deps.editor.onChange(() => this.sync());
     deps.ctl.onChange(() => this.sync());
     this.sync();
@@ -76,11 +91,13 @@ export class EditPanel {
     ctl.ensureEditable();
     switch (action) {
       case 'add-rail':
-      case 'add-launcher': {
+      case 'add-launcher':
+      case 'add-spring': {
         const p = this.deps.addPosition();
-        editor.addDevice(action === 'add-rail' ? 'rail' : 'launcher', p.x, p.z);
+        editor.addDevice(action === 'add-rail' ? 'rail' : action === 'add-launcher' ? 'launcher' : 'spring', p.x, p.z);
         break;
       }
+
       case 'rotate':
         editor.rotate(id!);
         break;
@@ -102,6 +119,36 @@ export class EditPanel {
     }
   }
 
+  /** 選択中の装置の設定（−／値／＋）。値はテキストで表示し、色に頼らない */
+  private renderParams(): void {
+    const box = this.el.params;
+    const sel = this.deps.editor.selected;
+    const specs = sel ? PARAM_SPECS[sel.type] : [];
+    box.hidden = specs.length === 0;
+    if (!sel || specs.length === 0) {
+      box.innerHTML = '';
+      return;
+    }
+    const connected = sel.type === 'launcher' && planLauncher(sel, this.deps.editor.devices).feedsRailId !== null;
+    box.innerHTML =
+      '<h3>設定</h3>' +
+      specs
+        .map((spec) => {
+          const v = paramValue(sel, spec.key);
+          const locked = connected && spec.key === 'angleDegrees';
+          const label = `${spec.label}`;
+          return `
+          <div class="param-row">
+            <span class="param-label">${label}</span>
+            <button type="button" data-param="${spec.key}" data-dir="-1" aria-label="${label}を下げる" ${locked || v <= spec.min ? 'disabled' : ''}>−</button>
+            <output aria-live="polite">${locked ? '0°' : formatParam(spec, v)}</output>
+            <button type="button" data-param="${spec.key}" data-dir="1" aria-label="${label}を上げる" ${locked || v >= spec.max ? 'disabled' : ''}>＋</button>
+            ${locked ? `<small>レールにつないでいる間は 0°（外すと ${formatParam(spec, v)}）</small>` : ''}
+          </div>`;
+        })
+        .join('');
+  }
+
   private sync(): void {
     const { editor } = this.deps;
     const sel = editor.selected;
@@ -109,6 +156,7 @@ export class EditPanel {
       ? `選択中：${getDeviceDef(sel.type).name} ${sel.id}（高さ ${sel.position[1].toFixed(1)}m・${sel.rotationYDeg}°）`
       : '部品をタップすると選択できます';
     for (const k of ['rotate', 'delete', 'up', 'down']) (this.el[k] as HTMLButtonElement).disabled = !sel;
+    this.renderParams();
     (this.el.undo as HTMLButtonElement).disabled = !editor.canUndo;
     (this.el.redo as HTMLButtonElement).disabled = !editor.canRedo;
     const m = editor.message;

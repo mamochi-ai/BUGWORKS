@@ -2,9 +2,10 @@ import type { Rapier } from './rapier';
 import type { Vec3 } from './catalog';
 import { GRAVITY, PHYSICS_DT } from './constants';
 import { buildLabBoxes, type LabBox } from './lab';
-import { LAUNCHER_SHAPE, MAX_BALLS, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
+import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
 import type { SliceLayout } from './layout';
-import { BALL_RADIUS, RAIL_PROFILE, buildRailTrack, type RailTrack } from './railGeometry';
+import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
+import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
 type World = InstanceType<Rapier['World']>;
 type RigidBody = ReturnType<World['createRigidBody']>;
@@ -37,13 +38,30 @@ export interface LauncherState {
   waitingSince: number | null;
 }
 
+export interface SpringState {
+  deviceId: string;
+  phase: 'ready' | 'compress' | 'recover';
+  /** 今の段階に入ってからの tick 数 */
+  t: number;
+  /** 受け止めている球 */
+  heldBallId: number | null;
+  /** 受け止めた位置（天板の面内座標 s, a と、天板からの浮き h） */
+  heldAt: [number, number, number] | null;
+  /** 打ち上げた回数 */
+  launches: number;
+}
+
 export interface SimSnapshot {
   tick: number;
+  springs: SpringState[];
   balls: BallSnapshot[];
   launchers: LauncherState[];
   /** 場外に落ちて取り除いた球の数 */
   lostBalls: number;
 }
+
+/** バネの天板の厚みの半分（m） */
+const SPRING_PLATE_HALF_THICKNESS = 0.03;
 
 /** レール・溝の底板の角の丸め（m）。継ぎ目での引っかかり防止。試作値 */
 const PLATE_EDGE_ROUNDING = 0.01;
@@ -74,6 +92,7 @@ export class Simulation {
   private world!: World;
   private balls: { id: number; body: RigidBody; prev: BallState }[] = [];
   private launchers: (LauncherPlan & LauncherState)[] = [];
+  private springs: (SpringPlan & SpringState & { plate: RigidBody })[] = [];
   private nextBallId = 0;
   private _tick = 0;
   private _lostBalls = 0;
@@ -152,6 +171,7 @@ export class Simulation {
       const reloadReady = l.lastFireTick === null || this._tick - l.lastFireTick >= l.reloadTicks;
       if (l.loadedBallId === null && reloadReady) this.load(l, l.hopperPoint);
     }
+    for (const sp of this.springs) this.stepSpring(sp);
     this.world.step();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
@@ -180,6 +200,73 @@ export class Simulation {
     return this.balls.map((b) => ({ id: b.id, prev: b.prev, curr: readBody(b.body) }));
   }
 
+  /** 描画用：バネごとの縮み量 */
+  springCompressions(): { deviceId: string; offset: number }[] {
+    return this.springs.map((sp) => ({ deviceId: sp.deviceId, offset: compressionAt(sp.phase, sp.t, sp) }));
+  }
+
+  /**
+   * バネ1台分の1tick（物理の前に呼ぶ）。
+   * ready：天板の上の球を探して受け止める → compress：天板と一緒に球を下げる → 縮みきったら打ち上げ → recover：天板が戻る
+   */
+  private stepSpring(sp: SpringPlan & SpringState & { plate: RigidBody }): void {
+    if (sp.phase === 'ready') {
+      const held = new Set(this.springs.map((x) => x.heldBallId).filter((id) => id !== null));
+      for (const l of this.launchers) if (l.loadedBallId !== null) held.add(l.loadedBallId);
+      const candidate = this.balls.find((b) => {
+        if (held.has(b.id)) return false;
+        const p = b.body.translation();
+        const v = b.body.linvel();
+        return canCapture(sp, [p.x, p.y, p.z], [v.x, v.y, v.z], BALL_RADIUS);
+      });
+      if (!candidate) return;
+      const p = candidate.body.translation();
+      const local = toPlate(sp, 0, [p.x, p.y, p.z]);
+      sp.phase = 'compress';
+      sp.t = 0;
+      sp.heldBallId = candidate.id;
+      sp.heldAt = [local.s, local.a, Math.max(0, local.h - BALL_RADIUS)];
+    }
+    sp.t++;
+    const offset = compressionAt(sp.phase, sp.t, sp);
+    const top = plateTop(sp, offset);
+    const [hx, hy, hz] = [sp.normal[0] * SPRING_PLATE_HALF_THICKNESS, sp.normal[1] * SPRING_PLATE_HALF_THICKNESS, sp.normal[2] * SPRING_PLATE_HALF_THICKNESS];
+    sp.plate.setNextKinematicTranslation({ x: top[0] - hx, y: top[1] - hy, z: top[2] - hz });
+
+    if (sp.phase === 'compress') {
+      const ball = this.balls.find((b) => b.id === sp.heldBallId);
+      if (!ball) {
+        sp.phase = 'recover';
+        sp.t = 0;
+        sp.heldBallId = null;
+        sp.heldAt = null;
+        return;
+      }
+      // 受け止めた球は、浮いていた分を縮む前半で天板へ下ろし、そのまま天板と一緒に下げる
+      const [s, a, h0] = sp.heldAt!;
+      const settle = Math.max(0, 1 - sp.t / (sp.compressTicks / 2));
+      const at = top.map((v, i) => v + sp.side[i] * s + sp.along[i] * a + sp.normal[i] * (BALL_RADIUS + h0 * settle));
+      ball.body.setTranslation({ x: at[0], y: at[1], z: at[2] }, true);
+      ball.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      if (sp.t >= sp.compressTicks) {
+        const v = sp.params.launchSpeed;
+        ball.body.setLinvel({ x: sp.normal[0] * v, y: sp.normal[1] * v, z: sp.normal[2] * v }, true);
+        sp.phase = 'recover';
+        sp.t = 0;
+        sp.heldBallId = null;
+        sp.heldAt = null;
+        sp.launches++;
+      } else {
+        ball.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      }
+      return;
+    }
+    if (sp.phase === 'recover' && sp.t >= sp.recoverTicks) {
+      sp.phase = 'ready';
+      sp.t = 0;
+    }
+  }
+
   /** 描画用：発射機ごとの次の発射 tick と間隔 */
   snapshotLaunchers(): { deviceId: string; lastFireTick: number | null }[] {
     return this.launchers.map((l) => ({ deviceId: l.deviceId, lastFireTick: l.lastFireTick }));
@@ -188,6 +275,14 @@ export class Simulation {
   snapshot(): SimSnapshot {
     return {
       tick: this._tick,
+      springs: this.springs.map((sp) => ({
+        deviceId: sp.deviceId,
+        phase: sp.phase,
+        t: sp.t,
+        heldBallId: sp.heldBallId,
+        heldAt: sp.heldAt ? [sp.heldAt[0], sp.heldAt[1], sp.heldAt[2]] : null,
+        launches: sp.launches,
+      })),
       balls: this.readBalls(),
       launchers: this.launchers.map((l) => ({
         deviceId: l.deviceId,
@@ -208,7 +303,7 @@ export class Simulation {
       loaded !== undefined &&
       (() => {
         const p = loaded.body.translation();
-        return Math.hypot(p.x - l.loadPoint[0], p.y - l.loadPoint[1], p.z - l.loadPoint[2]) < 0.03;
+        return Math.hypot(p.x - l.loadPoint[0], p.y - l.loadPoint[1], p.z - l.loadPoint[2]) < 0.035 && Math.hypot(...readBody(loaded.body).linvel) < 0.2;
       })();
     if (!loaded || !settled) {
       l.waiting = !loaded && this.balls.length >= MAX_BALLS ? 'max_balls' : 'loading';
@@ -266,6 +361,7 @@ export class Simulation {
     this._lostBalls = 0;
     this.balls = [];
     this.launchers = [];
+    this.springs = [];
     this.nextBallId = 0;
 
     for (const box of this.labBoxes) {
@@ -283,6 +379,33 @@ export class Simulation {
     for (const track of this.tracks) this.addRailColliders(track);
 
     for (const d of this._layout.devices) {
+      if (d.type !== 'spring') continue;
+      const plan = planSpring(d);
+      const [bx, by, bz] = SPRING_SHAPE.base.size;
+      const base = world.createRigidBody(
+        R.RigidBodyDesc.fixed()
+          .setTranslation(...add(d.position, rotateY(SPRING_SHAPE.base.center, plan.yaw)))
+          .setRotation(quatFromYawPitch(plan.yaw, 0)),
+      );
+      world.createCollider(R.ColliderDesc.cuboid(bx / 2, by / 2, bz / 2).setFriction(MATERIAL.floorFriction), base);
+      // 天板：位置で動かすキネマティック（縮む・戻る）。上面中心を軸に前へ傾ける
+      const c = plateTop(plan, 0);
+      const t = SPRING_PLATE_HALF_THICKNESS;
+      const plate = world.createRigidBody(
+        R.RigidBodyDesc.kinematicPositionBased()
+          .setTranslation(c[0] - plan.normal[0] * t, c[1] - plan.normal[1] * t, c[2] - plan.normal[2] * t)
+          .setRotation(quatFromYawPitch(plan.yaw, plan.tilt)),
+      );
+      const [hx, , hz] = SPRING_SHAPE.plateHalf;
+      const r = 0.01;
+      world.createCollider(
+        R.ColliderDesc.roundCuboid(hx - r, t - r, hz - r, r).setFriction(MATERIAL.railFriction).setRestitution(plan.params.restitution),
+        plate,
+      );
+      this.springs.push({ ...plan, deviceId: d.id, phase: 'ready', t: 0, heldBallId: null, heldAt: null, launches: 0, plate });
+    }
+
+    for (const d of this._layout.devices) {
       if (d.type !== 'launcher') continue;
       const yaw = (d.rotationYDeg * Math.PI) / 180;
       const S = LAUNCHER_SHAPE;
@@ -293,20 +416,21 @@ export class Simulation {
       );
       const [sx, sy, sz] = S.base.size;
       world.createCollider(R.ColliderDesc.cuboid(sx / 2, sy / 2, sz / 2).setFriction(MATERIAL.floorFriction), base);
-      // 溝（レールと同じ断面）＋後ろ壁
-      const len = S.frontZ - S.backZ;
+      // 溝（レールと同じ断面）＋球の止め（押し板を縮めた位置）。後端を軸に plan.angle だけ上へ傾く
+      const plan = planLauncher(d, this._layout.devices);
+      const len = CHUTE_LENGTH;
       const chute = world.createRigidBody(
         R.RigidBodyDesc.fixed()
-          .setTranslation(...launcherToWorld(d, [0, S.surfaceY, (S.frontZ + S.backZ) / 2]))
-          .setRotation(quatFromYawPitch(yaw, 0)),
+          .setTranslation(...launcherToWorld(d, chuteLocal(plan.angle, len / 2, 0)))
+          .setRotation(quatFromYawPitch(yaw, -plan.angle)),
       );
       railParts(len).forEach((part, i) => world.createCollider(this.trackPartDesc(part, i === 0), chute));
       const halfW = RAIL_PROFILE.innerWidth / 2 + RAIL_PROFILE.wallThickness;
-      world.createCollider(R.ColliderDesc.cuboid(halfW, 0.08, 0.02).setTranslation(0, 0.04, -len / 2 - 0.02), chute);
+      world.createCollider(R.ColliderDesc.cuboid(halfW, 0.08, 0.02).setTranslation(0, 0.04, -len / 2 + CHUTE_STOP_D - 0.02), chute);
 
       // 最初の球は装填済み（初期状態で溝の上に見える）。最初の発射は再生した瞬間（tick 0）
       const runtime = {
-        ...planLauncher(d, this._layout.devices),
+        ...plan,
         nextFireTick: 0,
         lastFireTick: null,
         loadedBallId: null,

@@ -26,7 +26,7 @@ const out = process.argv[2] || '.';
   console.log('0 initial', await state());
 
   // 1) rail_3 をタップして削除し、パレットからレールを追加
-  const r3pt = await screen([0, 0.3, 2]);
+  const r3pt = await screen([0, 0.9, 2]);
   await touch('touchStart', [r3pt]); await touch('touchEnd', []); await p.waitForTimeout(300);
   await p.getByRole('button', { name: '削除' }).tap();
   await p.waitForTimeout(300);
@@ -58,7 +58,7 @@ const out = process.argv[2] || '.';
   s = await state(); console.log('4 running', s.state, 'balls', s.balls, 'first', s.ball);
 
   // 5) 実行中にレールに触れるとリセットされ編集できる。回転→元に戻す
-  const r3 = await screen([0, 0.3, 2]);
+  const r3 = await screen([0, 0.9, 2]);
   await touch('touchStart', [r3]); await touch('touchEnd', []); await p.waitForTimeout(300);
   s = await state(); console.log('5 tapped rail while running ->', s.state, s.sel);
   await p.getByRole('button', { name: '回転' }).tap(); await p.waitForTimeout(200);
@@ -68,8 +68,8 @@ const out = process.argv[2] || '.';
 
   // 6) 置けない場所（他のレールに重ねる）→ 元に戻り理由表示
   await fix([7, 9, 3], [1.5, 0, -1]); await p.waitForTimeout(300);
-  const r3b = await screen([0, 0.3, 2]);
-  const r2 = await screen([0, 0, 0.2]);
+  const r3b = await screen([0, 0.9, 2]);
+  const r2 = await screen([0, 0.6, 0.2]);
   await drag(r3b, r2, 10);
   s = await state(); console.log('6 overlap drop', s.msg, s.conns);
 

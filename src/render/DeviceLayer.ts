@@ -4,7 +4,9 @@ import type { Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { buildRailTrack, portWorldPosition } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
+import { planLauncher } from '../sim/launcher';
 import { LauncherModelFactory } from './LauncherModel';
+import { SpringModelFactory } from './SpringModel';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
@@ -20,6 +22,7 @@ export class DeviceLayer {
   private readonly mats = createDeviceMaterials();
   private readonly railFactory = new RailModelFactory(this.mats);
   private readonly launcherFactory = new LauncherModelFactory(this.mats);
+  private readonly springFactory = new SpringModelFactory(this.mats);
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
   private readonly supports = new THREE.Group();
   private readonly markers = new THREE.Group();
@@ -55,11 +58,18 @@ export class DeviceLayer {
     const alive = new Set<string>();
     for (const d of devices) {
       alive.add(d.id);
-      const key = JSON.stringify([d.position, d.rotationYDeg, d.params ?? null]);
+      // 発射機は接続で溝の角度が変わるので、角度もキーに含める
+      const launcherAngle = d.type === 'launcher' ? planLauncher(d, devices).angle : 0;
+      const key = JSON.stringify([d.position, d.rotationYDeg, d.params ?? null, launcherAngle]);
       const existing = this.rails.get(d.id);
       if (existing?.key === key) continue;
       if (existing) this.disposeRail(existing.group);
-      const group = d.type === 'rail' ? this.railFactory.createRail(buildRailTrack(d)) : this.launcherFactory.create(d);
+      const group =
+        d.type === 'rail'
+          ? this.railFactory.createRail(buildRailTrack(d))
+          : d.type === 'launcher'
+            ? this.launcherFactory.create(d, launcherAngle)
+            : this.springFactory.create(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
       this.rails.set(d.id, { key, group });
@@ -153,6 +163,14 @@ export class DeviceLayer {
     for (const [id, c] of compression) {
       const r = this.rails.get(id);
       if (r) this.launcherFactory.setPlunger(r.group, c);
+    }
+  }
+
+  /** バネの天板とコイル（offset: deviceId → 縮み量 m） */
+  setSpringCompression(offsets: ReadonlyMap<string, number>): void {
+    for (const [id, o] of offsets) {
+      const r = this.rails.get(id);
+      if (r) this.springFactory.setCompression(r.group, o);
     }
   }
 
