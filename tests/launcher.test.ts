@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PHYSICS_HZ } from '../src/sim/constants';
-import { MAX_BALLS, launcherParams, planLauncher } from '../src/sim/launcher';
+import { LAUNCHER_SHAPE, MAX_BALLS, RELOAD_SECONDS, launcherParams, planLauncher, plungerCompression } from '../src/sim/launcher';
 import { VERTICAL_SLICE_LAYOUT, type PlacedDevice } from '../src/sim/layout';
-import { buildRailTrack } from '../src/sim/railGeometry';
+import { BALL_RADIUS, buildRailTrack, portWorldPosition } from '../src/sim/railGeometry';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
 
@@ -10,32 +10,38 @@ const base = VERTICAL_SLICE_LAYOUT.devices;
 const launcher = base.find((d) => d.type === 'launcher')!;
 const lone = (params?: Record<string, number>): PlacedDevice => ({ id: 'L', type: 'launcher', position: [0, 0, 0], rotationYDeg: 0, params });
 
-describe('発射の計画（物理なし）', () => {
+describe('発射機の形と発射の計画（物理なし）', () => {
   it('初期値は devices.v0.1.json（5m/s・45°・1秒）', () => {
     expect(launcherParams(launcher)).toEqual({ launchSpeed: 5, angleDegrees: 45, cooldownSeconds: 1 });
     expect(planLauncher(launcher, base).periodTicks).toBe(PHYSICS_HZ);
   });
 
-  it('レールにつながっていれば、レールの向きに 5m/s で送り出す', () => {
-    const plan = planLauncher(launcher, base);
-    expect(plan.feedsRailId).toBe('rail_1');
-    const dir = buildRailTrack(base.find((d) => d.id === 'rail_1')!).dir;
-    plan.velocity.forEach((v, i) => expect(v).toBeCloseTo(dir[i] * 5, 9));
+  it('溝の走行面は ball_out と同じ高さで、前端が ball_out', () => {
+    const out = portWorldPosition(lone(), 'ball_out');
+    expect(LAUNCHER_SHAPE.surfaceY).toBeCloseTo(out[1], 9);
+    expect(LAUNCHER_SHAPE.frontZ).toBeCloseTo(out[2], 9);
   });
 
-  it('つながっていなければ、前方から 45° 上へ撃つ', () => {
-    const plan = planLauncher(lone(), [lone()]);
-    expect(plan.feedsRailId).toBeNull();
-    expect(plan.velocity[0]).toBeCloseTo(0, 9);
-    expect(plan.velocity[1]).toBeCloseTo(5 * Math.SQRT1_2, 9);
-    expect(plan.velocity[2]).toBeCloseTo(5 * Math.SQRT1_2, 9);
+  it('装填位置は押し板を縮めたときの前面に接し、溝の中にある', () => {
+    const S = LAUNCHER_SHAPE;
+    expect(S.loadZ - BALL_RADIUS).toBeCloseTo(S.plungerRetractedZ, 9);
+    expect(S.loadZ + BALL_RADIUS).toBeLessThan(S.frontZ);
+    expect(S.plungerExtendedZ).toBeGreaterThan(S.plungerRetractedZ);
   });
 
-  it('90度回すと撃つ向きも回る', () => {
+  it('溝の向き（前方・水平）に launchSpeed で押し出す。回すと向きも回る', () => {
+    expect(planLauncher(launcher, base).velocity).toEqual([0, 0, 5]);
+    expect(planLauncher(launcher, base).feedsRailId).toBe('rail_1');
     const d = { ...lone(), rotationYDeg: 90 };
-    const plan = planLauncher(d, [d]);
-    expect(plan.velocity[0]).toBeGreaterThan(3);
-    expect(Math.abs(plan.velocity[2])).toBeLessThan(1e-9);
+    const v = planLauncher(d, [d]).velocity;
+    expect(v[0]).toBeCloseTo(5, 9);
+    expect(Math.abs(v[2])).toBeLessThan(1e-9);
+  });
+
+  it('押し板：撃つ前は縮んでいて、撃った瞬間に伸び、装填までに縮みきる', () => {
+    expect(plungerCompression(null)).toBe(1);
+    expect(plungerCompression(0)).toBe(0);
+    expect(plungerCompression(Math.round(RELOAD_SECONDS * PHYSICS_HZ))).toBe(1);
   });
 });
 
@@ -47,6 +53,7 @@ describe('発射（物理あり）', () => {
     sims.push(s);
     return s;
   };
+  const ball = (s: Simulation, id: number) => s.readBalls().find((b) => b.id === id)!;
   beforeAll(async () => {
     R = await loadRapier();
   });
@@ -54,17 +61,54 @@ describe('発射（物理あり）', () => {
     while (sims.length) sims.pop()!.dispose();
   });
 
-  it('再生前は球が無く、tick 0 で1個目、以後 1秒ごとに1個', () => {
+  it('初期状態で1個目が溝に装填されていて、再生前は止まっている', () => {
     const s = make();
-    expect(s.ballCount).toBe(0);
-    s.step();
     expect(s.ballCount).toBe(1);
-    for (let i = 1; i < PHYSICS_HZ; i++) s.step();
-    expect(s.ballCount).toBe(1);
+    const p = ball(s, 0).position;
+    const load = planLauncher(launcher, base).loadPoint;
+    p.forEach((v, i) => expect(v).toBeCloseTo(load[i], 6));
+  });
+
+  it('再生した瞬間に押し出され、溝を通ってレールへ転がり込む', () => {
+    const s = make();
     s.step();
+    expect(ball(s, 0).linvel[2]).toBeGreaterThan(4);
+    for (let i = 0; i < PHYSICS_HZ * 0.5; i++) s.step();
+    const p = ball(s, 0).position;
+    expect(p[2]).toBeGreaterThan(portWorldPosition(launcher, 'ball_out')[2]); // 溝を出てレール上
+    expect(Math.abs(p[0])).toBeLessThan(0.06);
+  });
+
+  it('溝からレール、レールからレールの継ぎ目で球が跳ねない（走行面から 1cm 以内）', () => {
+    const s = make();
+    const tracks = base.filter((d) => d.type === 'rail').map(buildRailTrack);
+    const surfaceAt = (z: number) => {
+      const t = tracks.find((t) => z >= t.start[2] && z <= t.end[2]);
+      if (t) return t.start[1] + ((z - t.start[2]) / (t.end[2] - t.start[2])) * (t.end[1] - t.start[1]);
+      return z < tracks[0].start[2] ? LAUNCHER_SHAPE.surfaceY : null;
+    };
+    let worst = 0;
+    for (let i = 0; i < PHYSICS_HZ * 2.2; i++) {
+      s.step();
+      const p = ball(s, 0).position;
+      const surf = surfaceAt(p[2]);
+      if (surf !== null) worst = Math.max(worst, p[1] - BALL_RADIUS - surf);
+    }
+    expect(worst).toBeLessThan(0.01);
+  });
+
+  it('撃ったあと装填口から次の球が落ちてきて、溝の上で止まり、1秒後に撃たれる', () => {
+    const s = make();
+    s.step(); // 発射
+    const reload = Math.round(RELOAD_SECONDS * PHYSICS_HZ);
+    for (let i = 0; i < reload; i++) s.step();
     expect(s.ballCount).toBe(2);
-    for (let i = 0; i < PHYSICS_HZ * 3; i++) s.step();
-    expect(s.ballCount).toBe(5);
+    const load = planLauncher(launcher, base).loadPoint;
+    expect(ball(s, 1).position[1]).toBeGreaterThan(load[1] + 0.1); // 上から落ちてくる
+    while (s.tick < PHYSICS_HZ) s.step();
+    ball(s, 1).position.forEach((v, i) => expect(v).toBeCloseTo(load[i], 1)); // 溝の上で待機
+    s.step(); // tick 120 で発射
+    expect(ball(s, 1).linvel[2]).toBeGreaterThan(4);
   });
 
   it(`球は ${MAX_BALLS} 個で止まり、上限で待機中であることがわかる`, () => {
@@ -75,26 +119,19 @@ describe('発射（物理あり）', () => {
     expect(s.lostBalls).toBe(0);
   });
 
-  it('発射口に前の球が残っていれば撃たずに待つ（重ねて生成しない）', () => {
-    const s = make([lone({ cooldownSeconds: 1 / PHYSICS_HZ, launchSpeed: 0.5, angleDegrees: 0 })]);
-    s.step();
-    s.step();
+  it('装填が間に合わない間隔では撃たずに待ち、続けば装填待ちとして知らせる', () => {
+    const s = make([lone({ cooldownSeconds: 2 / PHYSICS_HZ, launchSpeed: 0.3 })]);
+    for (let i = 0; i < 6; i++) s.step();
     expect(s.ballCount).toBe(1);
-    expect(s.launcherWaiting).toBe('blocked');
+    expect(s.launcherWaiting).toBe('loading');
   });
 
-  it('つながっていない発射機の球は放物線を描いて床に落ちる', () => {
+  it('レールにつながっていない発射機の球は前へ飛び出して床に落ちる', () => {
     const s = make([lone()]);
-    let maxY = 0;
-    for (let i = 0; i < PHYSICS_HZ * 2; i++) {
-      s.step();
-      const b = s.readBalls().find((x) => x.id === 0)!;
-      maxY = Math.max(maxY, b.position[1]);
-    }
-    const b = s.readBalls().find((x) => x.id === 0)!;
-    expect(maxY).toBeGreaterThan(1.2); // 0.75m の出口から上へ
-    expect(b.position[2]).toBeGreaterThan(2);
-    expect(b.position[1]).toBeLessThan(0.3);
+    for (let i = 0; i < PHYSICS_HZ * 1.5; i++) s.step();
+    const p = ball(s, 0).position;
+    expect(p[2]).toBeGreaterThan(1.5);
+    expect(p[1]).toBeLessThan(0.3);
   });
 
   it('複数の球がある状態でも、同じ配置なら全tickで一致し、リセットで初期状態に戻る', () => {

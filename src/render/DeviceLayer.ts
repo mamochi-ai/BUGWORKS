@@ -148,11 +148,11 @@ export class DeviceLayer {
     }
   }
 
-  /** 発射機のばねの縮み（charge: deviceId → 0..1） */
-  setLauncherCharge(charge: ReadonlyMap<string, number>): void {
-    for (const [id, c] of charge) {
+  /** 発射機の押し板とばね（compression: deviceId → 0..1） */
+  setLauncherCharge(compression: ReadonlyMap<string, number>): void {
+    for (const [id, c] of compression) {
       const r = this.rails.get(id);
-      if (r) LauncherModelFactory.setCharge(r.group, c);
+      if (r) this.launcherFactory.setPlunger(r.group, c);
     }
   }
 

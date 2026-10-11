@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { BallState, Simulation } from '../sim/Simulation';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { plungerCompression } from '../sim/launcher';
 import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
 import { DeviceLayer } from './DeviceLayer';
@@ -153,12 +154,11 @@ export class LabView {
   }
 }
 
-/** 次の発射までの溜め具合（0=撃った直後, 1=発射直前）。初期状態では 0 */
+/** 発射機ごとの押し板の縮み具合（0=撃った瞬間, 1=縮めて待機） */
 function launcherCharge(sim: Simulation): Map<string, number> {
   const m = new Map<string, number>();
-  const states = sim.snapshotLaunchers();
-  for (const l of states) {
-    m.set(l.deviceId, sim.tick === 0 ? 0 : 1 - Math.max(0, l.nextFireTick - sim.tick) / l.periodTicks);
+  for (const l of sim.snapshotLaunchers()) {
+    m.set(l.deviceId, plungerCompression(l.lastFireTick === null ? null : sim.tick - l.lastFireTick));
   }
   return m;
 }

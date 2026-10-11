@@ -107,8 +107,8 @@ export class Hud {
     const waiting = sim.launcherWaiting;
     const warn = waiting === 'max_balls'
       ? `⚠ 球が上限（${MAX_BALLS}個）に達したため、発射を止めています`
-      : waiting === 'blocked'
-        ? '⚠ 発射口に球が残っているため、発射を待っています'
+      : waiting === 'loading'
+        ? '⚠ 次の球を装填できないため、発射を待っています（装填口の近くに球が残っています）'
         : sim.lostBalls > 0
           ? `⚠ 場外に落ちた球を ${sim.lostBalls} 個取り除きました`
           : stats.droppedSeconds > 0
