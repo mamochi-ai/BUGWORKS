@@ -6,9 +6,8 @@ export const PALETTE = {
   curb: 0x3a3f47,
   gridMinor: 0x353b44,
   gridModule: 0x2fb8d8,
-  railPlate: 0x5a616b,
   railWall: 0xff7a1a,
   railLeg: 0x3d434b,
+  railSteel: 0x8a9099,
   ball: 0xc9ced6,
-  port: 0x3fd4ff,
 } as const;

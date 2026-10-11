@@ -16,6 +16,8 @@
 - [ ] 歯車・バネ・磁石・回転装置の簡易挙動（内部状態を Simulation の状態に含める）
 - [ ] 元に戻す/やり直し
 - [ ] 物理エンジン最終決定（DECISIONS D-02）
+- [ ] レールの見た目（D-14）：レールが増えたら金具・ボルトを InstancedMesh にまとめて描画負荷を下げる（現状 1本あたり約30メッシュ）
+- [ ] カーブ・坂・ループなど他のレール形状の見た目（デザイン画 rail_*.png を参考）
 
 ## 2. 手順3：隠しバグ 3種だけ
 - [ ] `triggerDetector` / `effectController` / `visualEffectId` / `safetyBudget` の分離構造

@@ -49,6 +49,7 @@ src/
     lab.ts                  研究所の簡易床（architecture.example-layout.json の地上階）
     layout.ts               縦切り用のレール3本＋鉄球の配置
   render/LabView.ts         Three.js 描画（物理状態を読むだけ。前後tickを補間）
+  render/RailModel.ts       レールの見た目（鋼管＋オレンジ金具＋支柱。描画専用、当たり判定は箱のまま）
   input/CameraRig.ts        自由カメラ（OrbitControls をタッチ優先で設定）
   ui/Hud.ts, style.css      HTMLテキストのUI（画像UIシートは使わない）
 spec/                       受領した仕様書のテキスト/JSON（画像と隠しバグの開発用資料は含めない）

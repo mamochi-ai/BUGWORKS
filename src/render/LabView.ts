@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import type { BallState, Simulation } from '../sim/Simulation';
-import { railParts, quatFromYawPitch } from '../sim/Simulation';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
+import { RailModelFactory } from './RailModel';
 
 /**
  * 物理状態を読むだけの描画層。物理ワールドへは書き込まない。
@@ -27,6 +28,11 @@ export class LabView {
 
     this.scene.background = new THREE.Color(PALETTE.background);
     this.scene.fog = new THREE.Fog(PALETTE.background, 18, 40);
+    // 金属の映り込み用の簡易環境マップ（外部画像なしで生成）
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.35;
+    pmrem.dispose();
     this.addLights();
     this.addLab();
     this.addRails();
@@ -114,48 +120,17 @@ export class LabView {
   }
 
   private addRails(): void {
-    const plateMat = new THREE.MeshStandardMaterial({ color: PALETTE.railPlate, roughness: 0.4, metalness: 0.8 });
-    const wallMat = new THREE.MeshStandardMaterial({ color: PALETTE.railWall, roughness: 0.5, metalness: 0.3 });
-    const legMat = new THREE.MeshStandardMaterial({ color: PALETTE.railLeg, roughness: 0.7, metalness: 0.5 });
-    const portMat = new THREE.MeshBasicMaterial({ color: PALETTE.port });
-
+    const factory = new RailModelFactory();
+    const supports = new Set<string>();
     for (const track of this.sim.tracks) {
-      const group = new THREE.Group();
-      group.name = track.deviceId;
-      group.position.set(
-        (track.start[0] + track.end[0]) / 2,
-        (track.start[1] + track.end[1]) / 2,
-        (track.start[2] + track.end[2]) / 2,
-      );
-      const q = quatFromYawPitch(track.yawRad, track.pitch);
-      group.quaternion.set(q.x, q.y, q.z, q.w);
-      railParts(track.length).forEach((part, i) => {
-        const m = new THREE.Mesh(
-          new THREE.BoxGeometry(part.half[0] * 2, part.half[1] * 2, part.half[2] * 2),
-          i === 0 ? plateMat : wallMat,
-        );
-        m.position.set(...part.offset);
-        m.castShadow = true;
-        m.receiveShadow = true;
-        group.add(m);
-      });
-      this.scene.add(group);
-
-      // 見た目だけの支柱（当たり判定なし）
-      for (const end of [track.start, track.end]) {
-        const h = end[1] - 0.05;
-        if (h <= 0.02) continue;
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, h, 0.06), legMat);
-        leg.position.set(end[0], h / 2, end[2]);
-        leg.castShadow = true;
-        this.scene.add(leg);
-      }
-      // ポート位置の目印（ball 型ポート）
-      for (const end of [track.start, track.end]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.008, 6, 24), portMat);
-        ring.position.set(...end);
-        ring.rotation.y = track.yawRad;
-        this.scene.add(ring);
+      this.scene.add(factory.createRail(track));
+      // 継ぎ目のポートは隣のレールと共有なので支柱は1本だけ
+      for (const port of [track.start, track.end]) {
+        const key = port.map((v) => v.toFixed(3)).join(',');
+        if (supports.has(key)) continue;
+        supports.add(key);
+        const support = factory.createSupport(port);
+        if (support) this.scene.add(support);
       }
     }
   }
