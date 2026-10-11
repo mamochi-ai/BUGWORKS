@@ -10,4 +10,6 @@ export const PALETTE = {
   railLeg: 0x3d434b,
   railSteel: 0x8a9099,
   ball: 0xc9ced6,
+  /** 異常現象・ゴールのシアン */
+  anomaly: 0x3fd4ff,
 } as const;

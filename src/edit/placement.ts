@@ -1,6 +1,33 @@
 import { getDeviceDef, getPort, type Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
+import { platformTop, platformHeight } from '../sim/goal';
 import { portWorldPosition, rotateY } from '../sim/railGeometry';
+
+/**
+ * 置いた面の上に乗る装置（DECISIONS.md D-23）。高さは手で変えず、真下の台の上面（無ければ床）に合わせる。
+ * 台そのものは常に床に置く。
+ */
+export function restsOnSurface(type: PlacedDevice['type']): boolean {
+  return type === 'goal' || type === 'spring' || type === 'platform';
+}
+
+/** (x, z) の真下にある台の上面の高さ（無ければ 0 = 床） */
+export function surfaceHeightAt(x: number, z: number, devices: readonly PlacedDevice[], excludeId?: string): number {
+  let top = 0;
+  for (const d of devices) {
+    if (d.type !== 'platform' || d.id === excludeId) continue;
+    const f = footprint(d);
+    if (x > f.minX + 1e-9 && x < f.maxX - 1e-9 && z > f.minZ + 1e-9 && z < f.maxZ - 1e-9) top = Math.max(top, platformTop(d));
+  }
+  return top;
+}
+
+/** 面に乗る装置の高さを、真下の面に合わせる（それ以外はそのまま） */
+export function seatOnSurface(device: PlacedDevice, others: readonly PlacedDevice[]): PlacedDevice {
+  if (!restsOnSurface(device.type)) return device;
+  const y = device.type === 'platform' ? 0 : surfaceHeightAt(device.position[0], device.position[2], others, device.id);
+  return y === device.position[1] ? device : { ...device, position: [device.position[0], y, device.position[2]] };
+}
 
 /**
  * 配置・接続のルール（描画にも物理にも依存しない純粋関数）。
@@ -70,7 +97,8 @@ export function snapToGrid(v: number): number {
 
 /** XZ 平面上の外形（90度単位の回転なので軸平行の箱で正確に表せる）と高さ範囲 */
 export function footprint(device: PlacedDevice): { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number } {
-  const [sx, sy, sz] = getDeviceDef(device.type).size;
+  const [sx, defY, sz] = getDeviceDef(device.type).size;
+  const sy = device.type === 'platform' ? platformHeight(device) : defY;
   const quarter = (((Math.round(device.rotationYDeg / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
   const [hx, hz] = quarter % 2 === 0 ? [sx / 2, sz / 2] : [sz / 2, sx / 2];
   const [x, y, z] = device.position;
@@ -182,7 +210,7 @@ export function checkPlacement(device: PlacedDevice, others: readonly PlacedDevi
  * 高さ（y）は吸着時のみ変わり、それ以外は元の高さを保つ。
  */
 export function evaluateMove(moving: PlacedDevice, desiredX: number, desiredZ: number, others: readonly PlacedDevice[]): PlacementEvaluation {
-  const free: PlacedDevice = { ...moving, position: [snapToGrid(desiredX), moving.position[1], snapToGrid(desiredZ)] };
+  const free: PlacedDevice = seatOnSurface({ ...moving, position: [snapToGrid(desiredX), moving.position[1], snapToGrid(desiredZ)] }, others);
 
   type Candidate = { snap: SnapResult; dist: number; problem?: PlacementProblem };
   const candidates: Candidate[] = [];
@@ -238,7 +266,7 @@ export function findFreeSpot(template: PlacedDevice, nearX: number, nearZ: numbe
     for (let i = -ring; i <= ring; i++) {
       for (let j = -ring; j <= ring; j++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== ring) continue;
-        const d: PlacedDevice = { ...template, position: [cx + i * g, template.position[1], cz + j * g] };
+        const d: PlacedDevice = seatOnSurface({ ...template, position: [cx + i * g, template.position[1], cz + j * g] }, others);
         if (!problemOf(d, others)) return d;
       }
     }

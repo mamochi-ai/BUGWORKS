@@ -7,6 +7,8 @@ import {
   evaluateMove,
   findConnections,
   findFreeSpot,
+  restsOnSurface,
+  seatOnSurface,
   type Connection,
   type PlacementEvaluation,
 } from './placement';
@@ -129,6 +131,10 @@ export class EditorModel {
   changeHeight(id: string, steps: number): boolean {
     const d = this.find(id);
     if (!d) return false;
+    if (restsOnSurface(d.type)) {
+      this.fail(d.type === 'platform' ? '台の高さは「設定」で変えてください' : 'この装置は真下の台（なければ床）の上に置かれます');
+      return false;
+    }
     const y = round(d.position[1] + steps * PLACEMENT.heightStep);
     return this.tryReplace(
       { ...d, position: [d.position[0], y, d.position[2]] },
@@ -182,7 +188,13 @@ export class EditorModel {
   }
 
   private tryReplace(next: PlacedDevice, okText: string, failPrefix: string): boolean {
-    const check = checkPlacement(next, this.others(next.id));
+    // 台の高さを変えたときなど、上に乗っている装置を先に合わせ直してから重なりを調べる
+    const list = this.replace(next);
+    const seated = list.map((d) => seatOnSurface(d, list));
+    const check = checkPlacement(
+      seated.find((d) => d.id === next.id)!,
+      seated.filter((d) => d.id !== next.id),
+    );
     if (!check.ok) {
       this.fail(`${failPrefix}：${PROBLEM_TEXT[check.problem!]}`);
       return false;
@@ -201,6 +213,8 @@ export class EditorModel {
   }
 
   private commit(next: PlacedDevice[], text: string, kind: EditMessage['kind'] = 'info'): void {
+    // 台を動かしたり高さを変えたりしたら、上に乗っている装置の高さを合わせ直す
+    next = next.map((d) => seatOnSurface(d, next));
     this.past.push(this._devices);
     if (this.past.length > HISTORY_LIMIT) this.past.shift();
     this.future = [];

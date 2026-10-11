@@ -1,9 +1,10 @@
 import type { Rapier } from './rapier';
-import type { Vec3 } from './catalog';
+import { getDeviceDef, type Vec3 } from './catalog';
 import { GRAVITY, PHYSICS_DT } from './constants';
 import { buildLabBoxes, type LabBox } from './lab';
 import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
-import type { SliceLayout } from './layout';
+import type { PlacedDevice, SliceLayout } from './layout';
+import { inGoal, platformHeight } from './goal';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -51,8 +52,19 @@ export interface SpringState {
   launches: number;
 }
 
+export interface GoalState {
+  deviceId: string;
+  /** 回収した球の数 */
+  hits: number;
+  /** 最初に入った tick（まだなら null） */
+  firstHitTick: number | null;
+  /** 最後に入った tick（演出用） */
+  lastHitTick: number | null;
+}
+
 export interface SimSnapshot {
   tick: number;
+  goals: GoalState[];
   springs: SpringState[];
   balls: BallSnapshot[];
   launchers: LauncherState[];
@@ -93,6 +105,7 @@ export class Simulation {
   private balls: { id: number; body: RigidBody; prev: BallState }[] = [];
   private launchers: (LauncherPlan & LauncherState)[] = [];
   private springs: (SpringPlan & SpringState & { plate: RigidBody })[] = [];
+  private goals: (GoalState & { device: PlacedDevice })[] = [];
   private nextBallId = 0;
   private _tick = 0;
   private _lostBalls = 0;
@@ -175,10 +188,18 @@ export class Simulation {
     this.world.step();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
-      if (b.body.translation().y < KILL_PLANE_Y) {
-        for (const l of this.launchers) if (l.loadedBallId === b.id) l.loadedBallId = null;
-        this.world.removeRigidBody(b.body);
-        this.balls.splice(i, 1);
+      const t = b.body.translation();
+      // ゴールに入った球は回収して数える（配置順で最初に当てはまったゴール）
+      const goal = this.goals.find((g) => inGoal(g.device, [t.x, t.y, t.z]));
+      if (goal) {
+        goal.hits++;
+        goal.firstHitTick ??= this._tick;
+        goal.lastHitTick = this._tick;
+        this.removeBall(i);
+        continue;
+      }
+      if (t.y < KILL_PLANE_Y) {
+        this.removeBall(i);
         this._lostBalls++;
       }
     }
@@ -198,6 +219,31 @@ export class Simulation {
   /** 描画補間用：各球の 1tick 前と現在 */
   readBallFrames(): { id: number; prev: BallState; curr: BallState }[] {
     return this.balls.map((b) => ({ id: b.id, prev: b.prev, curr: readBody(b.body) }));
+  }
+
+  /** 球を取り除く（装填中・受け止め中の記録も外す） */
+  private removeBall(index: number): void {
+    const b = this.balls[index];
+    for (const l of this.launchers) if (l.loadedBallId === b.id) l.loadedBallId = null;
+    for (const sp of this.springs) {
+      if (sp.heldBallId === b.id) {
+        sp.heldBallId = null;
+        sp.heldAt = null;
+      }
+    }
+    this.world.removeRigidBody(b.body);
+    this.balls.splice(index, 1);
+  }
+
+  /** ゴールに入った球の合計 */
+  get goalHits(): number {
+    return this.goals.reduce((n, g) => n + g.hits, 0);
+  }
+
+  /** 最初に球がゴールに入った tick（クリア）。まだなら null */
+  get firstGoalTick(): number | null {
+    const ticks = this.goals.map((g) => g.firstHitTick).filter((t): t is number => t !== null);
+    return ticks.length ? Math.min(...ticks) : null;
   }
 
   /** 描画用：バネごとの縮み量 */
@@ -275,6 +321,7 @@ export class Simulation {
   snapshot(): SimSnapshot {
     return {
       tick: this._tick,
+      goals: this.goals.map((g) => ({ deviceId: g.deviceId, hits: g.hits, firstHitTick: g.firstHitTick, lastHitTick: g.lastHitTick })),
       springs: this.springs.map((sp) => ({
         deviceId: sp.deviceId,
         phase: sp.phase,
@@ -362,6 +409,7 @@ export class Simulation {
     this.balls = [];
     this.launchers = [];
     this.springs = [];
+    this.goals = [];
     this.nextBallId = 0;
 
     for (const box of this.labBoxes) {
@@ -377,6 +425,19 @@ export class Simulation {
     }
 
     for (const track of this.tracks) this.addRailColliders(track);
+
+    for (const d of this._layout.devices) {
+      if (d.type === 'goal') this.goals.push({ deviceId: d.id, device: d, hits: 0, firstHitTick: null, lastHitTick: null });
+      if (d.type !== 'platform') continue;
+      const [sx, , sz] = getDeviceDef('platform').size;
+      const h = platformHeight(d);
+      const body = world.createRigidBody(
+        R.RigidBodyDesc.fixed()
+          .setTranslation(d.position[0], d.position[1] + h / 2, d.position[2])
+          .setRotation(quatFromYawPitch((d.rotationYDeg * Math.PI) / 180, 0)),
+      );
+      world.createCollider(R.ColliderDesc.cuboid(sx / 2, h / 2, sz / 2).setFriction(MATERIAL.floorFriction), body);
+    }
 
     for (const d of this._layout.devices) {
       if (d.type !== 'spring') continue;

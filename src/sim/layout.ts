@@ -17,7 +17,7 @@ export interface PlacedDevice {
   params?: Record<string, number>;
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform';
 
 export interface SliceLayout {
   seed: number;
@@ -44,5 +44,8 @@ export const VERTICAL_SLICE_LAYOUT: SliceLayout = {
     { id: 'rail_3', type: 'rail', position: [0, 0.6, 2], rotationYDeg: 0 },
     // 天板を 15° 前へ傾け、打ち上げた球を前へ送り出す（0° だと真上に上がって同じバネに落ち続ける）
     { id: 'spring_1', type: 'spring', position: [0, 0, 3.5], rotationYDeg: 0, params: { tiltDegrees: 15 } },
+    // バネで打ち上げた球が上の段（高さ1m の台）に落ち、転がってゴールに入る
+    { id: 'platform_1', type: 'platform', position: [0, 0, 4.75], rotationYDeg: 0, params: { heightMeters: 1 } },
+    { id: 'goal_1', type: 'goal', position: [0, 1, 5], rotationYDeg: 0 },
   ],
 };

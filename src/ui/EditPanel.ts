@@ -1,5 +1,10 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
+import type { DeviceType } from '../sim/layout';
+import { restsOnSurface } from '../edit/placement';
+
+/** パレットに並べる装置 */
+const PALETTE_TYPES: DeviceType[] = ['rail', 'launcher', 'spring', 'platform', 'goal'];
 import { PARAM_SPECS, formatParam, paramValue } from '../edit/params';
 import { planLauncher } from '../sim/launcher';
 import type { SimulationController } from '../sim/SimulationController';
@@ -27,9 +32,9 @@ export class EditPanel {
     panel.setAttribute('aria-label', '装置の配置');
     panel.innerHTML = `
       <h2>装置</h2>
-      <button type="button" data-e="add-rail" class="add"><i>＋</i><span>${getDeviceDef('rail').name}</span></button>
-      <button type="button" data-e="add-launcher" class="add"><i>＋</i><span>${getDeviceDef('launcher').name}</span></button>
-      <button type="button" data-e="add-spring" class="add"><i>＋</i><span>${getDeviceDef('spring').name}</span></button>
+      <div class="palette">
+        ${PALETTE_TYPES.map((t) => `<button type="button" data-e="add-${t}" class="add"><i>＋</i><span>${getDeviceDef(t).name}</span></button>`).join('')}
+      </div>
       <div class="sel" data-k="sel"></div>
       <div class="row">
         <button type="button" data-e="rotate" aria-label="回転"><i>⟳</i><span>回転</span></button>
@@ -92,9 +97,11 @@ export class EditPanel {
     switch (action) {
       case 'add-rail':
       case 'add-launcher':
-      case 'add-spring': {
+      case 'add-spring':
+      case 'add-goal':
+      case 'add-platform': {
         const p = this.deps.addPosition();
-        editor.addDevice(action === 'add-rail' ? 'rail' : action === 'add-launcher' ? 'launcher' : 'spring', p.x, p.z);
+        editor.addDevice(action.slice(4) as DeviceType, p.x, p.z);
         break;
       }
 
@@ -156,6 +163,8 @@ export class EditPanel {
       ? `選択中：${getDeviceDef(sel.type).name} ${sel.id}（高さ ${sel.position[1].toFixed(1)}m・${sel.rotationYDeg}°）`
       : '部品をタップすると選択できます';
     for (const k of ['rotate', 'delete', 'up', 'down']) (this.el[k] as HTMLButtonElement).disabled = !sel;
+    // 台の上（または床）に乗る装置は高さを手で変えない
+    if (sel && restsOnSurface(sel.type)) for (const k of ['up', 'down']) (this.el[k] as HTMLButtonElement).disabled = true;
     this.renderParams();
     (this.el.undo as HTMLButtonElement).disabled = !editor.canUndo;
     (this.el.redo as HTMLButtonElement).disabled = !editor.canRedo;
