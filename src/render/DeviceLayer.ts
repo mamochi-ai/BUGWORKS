@@ -1,14 +1,16 @@
 import * as THREE from 'three';
-import { ballPorts, footprint, type Connection, type PortRef } from '../edit/placement';
+import { rolePorts, footprint, type Connection, type PortRef } from '../edit/placement';
 import type { Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { buildRailTrack, portWorldPosition } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
 import { planLauncher } from '../sim/launcher';
+import type { Simulation } from '../sim/Simulation';
 import { curveFrame, curveToWorld, curveTurn } from '../sim/curveGeometry';
 import { LauncherModelFactory } from './LauncherModel';
 import { SpringModelFactory } from './SpringModel';
 import { GoalModelFactory } from './GoalModels';
+import { DriveModelFactory } from './DriveModels';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
@@ -26,6 +28,7 @@ export class DeviceLayer {
   private readonly launcherFactory = new LauncherModelFactory(this.mats);
   private readonly springFactory = new SpringModelFactory(this.mats);
   private readonly goalFactory = new GoalModelFactory(this.mats);
+  private readonly driveFactory = new DriveModelFactory(this.mats, this.railFactory);
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
   private readonly supports = new THREE.Group();
   private readonly markers = new THREE.Group();
@@ -78,7 +81,15 @@ export class DeviceLayer {
               ? this.springFactory.create(d)
               : d.type === 'goal'
                 ? this.goalFactory.createGoal(d)
-                : this.goalFactory.createPlatform(d);
+                : d.type === 'platform'
+                  ? this.goalFactory.createPlatform(d)
+                  : d.type === 'paddle'
+                    ? this.driveFactory.createPaddle(d)
+                    : d.type === 'gearbox'
+                      ? this.driveFactory.createGearbox(d)
+                      : d.type === 'shaft'
+                        ? this.driveFactory.createShaft(d)
+                        : this.driveFactory.createBridge(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
       this.rails.set(d.id, { key, group });
@@ -144,7 +155,7 @@ export class DeviceLayer {
     // 発射機の出口は発射機自身が支えるので、そこに支柱は立てない
     const seen = new Set<string>(devices.filter((d) => d.type === 'launcher').map((d) => key(portWorldPosition(d, 'ball_out'))));
     for (const d of devices) {
-      if (d.type !== 'rail' && d.type !== 'curve') continue;
+      if (d.type !== 'rail' && d.type !== 'curve' && d.type !== 'paddle') continue;
       // カーブは弧の中央にも支柱を立てる
       const extra: Vec3[] = d.type === 'curve' ? [curveToWorld(d, curveFrame(curveTurn(d), 0.5).pos)] : [];
       for (const p of [...['ball_in', 'ball_out'].map((id) => portWorldPosition(d, id)), ...extra]) {
@@ -160,10 +171,16 @@ export class DeviceLayer {
     this.markers.clear();
     const linked = new Set(connections.flatMap((c) => [`${c.from.deviceId}/${c.from.portId}`, `${c.to.deviceId}/${c.to.portId}`]));
     for (const d of devices) {
-      for (const { portId } of ballPorts(d)) {
+      for (const { portId, type } of rolePorts(d)) {
         const isSnap = snapTo?.deviceId === d.id && snapTo.portId === portId;
         if (linked.has(`${d.id}/${portId}`) && !isSnap) continue;
-        this.markers.add(this.ring(portWorldPosition(d, portId), (d.rotationYDeg * Math.PI) / 180, isSnap));
+        const ring = this.ring(portWorldPosition(d, portId), (d.rotationYDeg * Math.PI) / 180, isSnap);
+        // 軸のポートは小さい輪を軸の高さに（球の通り道ではない）
+        if (type === 'shaft') {
+          ring.position.y -= 0.1;
+          ring.scale.multiplyScalar(0.45);
+        }
+        this.markers.add(ring);
       }
     }
   }
@@ -181,6 +198,20 @@ export class DeviceLayer {
     for (const [id, o] of offsets) {
       const r = this.rails.get(id);
       if (r) this.springFactory.setCompression(r.group, o);
+    }
+  }
+
+  /** 羽根車・歯車・軸・可動橋の角度 */
+  setDriveAngles(angles: ReturnType<Simulation['driveAngles']>): void {
+    for (const [id, r] of this.rails) {
+      const d = this.devices.find((x) => x.id === id);
+      if (!d) continue;
+      const input = angles.shafts.input.get(id) ?? 0;
+      const output = angles.shafts.output.get(id) ?? 0;
+      if (d.type === 'paddle') this.driveFactory.setAngles(r.group, { wheel: angles.paddles.get(id) ?? 0 });
+      else if (d.type === 'gearbox') this.driveFactory.setAngles(r.group, { gearIn: input, gearOut: output });
+      else if (d.type === 'shaft') this.driveFactory.setAngles(r.group, { shaft: output });
+      else if (d.type === 'bridge') this.driveFactory.setAngles(r.group, { bridge: angles.bridges.get(id) ?? 0, bridgeGear: input });
     }
   }
 

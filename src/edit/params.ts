@@ -3,6 +3,7 @@ import { launcherParams } from '../sim/launcher';
 import { springParams } from '../sim/spring';
 import { platformHeight } from '../sim/goal';
 import { curveTurn } from '../sim/curveGeometry';
+import { gearRatio, shaftLength } from '../sim/drive';
 
 /**
  * 画面で変えられる装置の設定（範囲と刻みは試作値, DECISIONS.md D-22）。
@@ -46,6 +47,25 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
     },
   ],
   platform: [{ key: 'heightMeters', label: '高さ', unit: 'm', min: 0.2, max: 2, step: 0.2 }],
+  paddle: [],
+  bridge: [],
+  gearbox: [
+    {
+      key: 'gearRatio',
+      label: 'ギア比（出力÷入力）',
+      unit: '',
+      min: 0.5,
+      max: 3,
+      step: 0.5,
+      choices: [
+        { value: 0.5, label: '1/2倍' },
+        { value: 1, label: '等速' },
+        { value: 2, label: '2倍' },
+        { value: 3, label: '3倍' },
+      ],
+    },
+  ],
+  shaft: [{ key: 'lengthMeters', label: '長さ', unit: 'm', min: 0.5, max: 3, step: 0.5 }],
 };
 
 export function findSpec(type: DeviceType, key: string): ParamSpec | undefined {
@@ -74,7 +94,11 @@ export function paramValue(device: PlacedDevice, key: string): number {
           ? { heightMeters: platformHeight(device) }
           : device.type === 'curve'
             ? { turn: curveTurn(device) }
-            : {};
+            : device.type === 'gearbox'
+              ? { gearRatio: gearRatio(device) }
+              : device.type === 'shaft'
+                ? { lengthMeters: shaftLength(device) }
+                : {};
   return all[key] ?? NaN;
 }
 

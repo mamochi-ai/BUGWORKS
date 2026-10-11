@@ -39,7 +39,7 @@ const out = process.argv[2] || '.';
 
   // 2) 空き場所の1本指ドラッグはカメラ回転（部品は動かない）
   const camBefore = (await state()).cam;
-  await drag([150, 650], [300, 650]);
+  await drag([1050, 700], [1150, 700]); // 左のパネルと重ならない空き場所
   s = await state(); console.log('2 empty drag: camera moved', JSON.stringify(camBefore) !== JSON.stringify(s.cam), 'devices same', s.n);
   await fix([7, 9, 3], [1.5, 0, -1]); await p.waitForTimeout(300);
 

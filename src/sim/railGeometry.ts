@@ -1,5 +1,6 @@
 import { getDeviceDef, getPort, type PortDef, type Vec3 } from './catalog';
 import { curvePorts, curveTurn } from './curveGeometry';
+import { SHAFT_Y, isFloorShaftPort, shaftPortZ } from './drive';
 import type { PlacedDevice } from './layout';
 
 /** 試作用の鉄球半径（m）。仕様に記載なし → DECISIONS.md D-06 */
@@ -51,7 +52,12 @@ export function localPort(device: PlacedDevice, portId: string): PortDef {
     if (!p) throw new Error(`装置 ${device.id} にポート ${portId} がありません`);
     return p;
   }
-  return getPort(getDeviceDef(device.type), portId);
+  const port = getPort(getDeviceDef(device.type), portId);
+  // 長さが変わる軸
+  if (device.type === 'shaft') return { ...port, position: [0, port.position[1], shaftPortZ(device, portId)] };
+  // 羽根車・可動橋の軸は、装置の高さによらず床から一定の高さ
+  if (isFloorShaftPort(device, portId)) return { ...port, position: [port.position[0], SHAFT_Y - device.position[1], port.position[2]] };
+  return port;
 }
 
 /** 装置ローカル座標のポートをワールド座標へ */
@@ -75,8 +81,9 @@ function railInY(device: PlacedDevice): number {
   return out + slope;
 }
 
+/** ball_in → ball_out をまっすぐ結ぶ走行路（レール・羽根車・可動橋〔下りた状態〕） */
 export function buildRailTrack(device: PlacedDevice): RailTrack {
-  if (device.type !== 'rail') throw new Error(`レールではありません: ${device.id}`);
+  if (device.type !== 'rail' && device.type !== 'paddle' && device.type !== 'bridge') throw new Error(`直線の走行路ではありません: ${device.id}`);
   const start = portWorldPosition(device, 'ball_in');
   const end = portWorldPosition(device, 'ball_out');
   const d: Vec3 = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];

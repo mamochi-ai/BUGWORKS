@@ -6,6 +6,8 @@ import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, laun
 import type { PlacedDevice, SliceLayout } from './layout';
 import { inGoal, platformHeight } from './goal';
 import { curveMesh, curveTurn } from './curveGeometry';
+import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
+import { findConnections, footprint } from '../edit/placement';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -63,8 +65,27 @@ export interface GoalState {
   lastHitTick: number | null;
 }
 
+export interface PaddleState {
+  deviceId: string;
+  /** 羽根の角度と、目標の角度（rad） */
+  angle: number;
+  target: number;
+  /** 通った球の数 */
+  passes: number;
+}
+
+export interface BridgeState {
+  deviceId: string;
+  /** 跳ね上がりの角度（rad、0 = つながった） */
+  angle: number;
+  /** 受け取った回転（rad） */
+  input: number;
+}
+
 export interface SimSnapshot {
   tick: number;
+  paddles: PaddleState[];
+  bridges: BridgeState[];
   goals: GoalState[];
   springs: SpringState[];
   balls: BallSnapshot[];
@@ -107,6 +128,9 @@ export class Simulation {
   private launchers: (LauncherPlan & LauncherState)[] = [];
   private springs: (SpringPlan & SpringState & { plate: RigidBody })[] = [];
   private goals: (GoalState & { device: PlacedDevice })[] = [];
+  private paddles: (PaddleState & { device: PlacedDevice; inside: Set<number> })[] = [];
+  private bridges: (BridgeState & { device: PlacedDevice; deck: RigidBody; hinge: Vec3; deckCenter: Vec3; deckPitch: number; yaw: number })[] = [];
+  private shaftLinks: ShaftLink[] = [];
   private nextBallId = 0;
   private _tick = 0;
   private _lostBalls = 0;
@@ -137,7 +161,8 @@ export class Simulation {
   }
 
   private applyTracks(): void {
-    this._tracks = this._layout.devices.filter((d) => d.type === 'rail').map(buildRailTrack);
+    // 固定の直線走行路：レールと羽根車（可動橋は動くので別に作る）
+    this._tracks = this._layout.devices.filter((d) => d.type === 'rail' || d.type === 'paddle').map(buildRailTrack);
   }
 
   get tick(): number {
@@ -186,6 +211,7 @@ export class Simulation {
       if (l.loadedBallId === null && reloadReady) this.load(l, l.hopperPoint);
     }
     for (const sp of this.springs) this.stepSpring(sp);
+    this.stepDrive();
     this.world.step();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
@@ -245,6 +271,67 @@ export class Simulation {
   get firstGoalTick(): number | null {
     const ticks = this.goals.map((g) => g.firstHitTick).filter((t): t is number => t !== null);
     return ticks.length ? Math.min(...ticks) : null;
+  }
+
+  /**
+   * 回転の伝わり（物理の前に呼ぶ）：羽根車が球を数えて回る → 軸・歯車装置を通って可動橋が下りる。
+   */
+  private stepDrive(): void {
+    if (this.paddles.length === 0 && this.bridges.length === 0) return;
+    const dt = PHYSICS_DT;
+    for (const p of this.paddles) {
+      // 範囲に入ってきた球（前のtickにはいなかった球）を数える
+      const now = new Set<number>();
+      for (const b of this.balls) {
+        const t = b.body.translation();
+        if (inPaddleZone(p.device, [t.x, t.y, t.z])) now.add(b.id);
+      }
+      for (const id of now) {
+        if (!p.inside.has(id)) {
+          p.target += PADDLE.stepRad;
+          p.passes++;
+        }
+      }
+      p.inside = now;
+      p.angle = approach(p.angle, p.target, PADDLE.maxSpeed * dt);
+    }
+    const paddleAngle = new Map(this.paddles.map((p) => [p.deviceId, p.angle]));
+    const { input } = solveDrive(this._layout.devices, this.shaftLinks, (id) => paddleAngle.get(id) ?? 0);
+    for (const br of this.bridges) {
+      br.input = input.get(br.deviceId) ?? 0;
+      const next = approach(br.angle, bridgeTargetAngle(br.input), BRIDGE.maxSpeed * dt);
+      if (next !== br.angle) {
+        br.angle = next;
+        this.poseBridge(br, true);
+      }
+    }
+  }
+
+  /** 可動橋の床板を、出口側の蝶番を軸に angle だけ跳ね上げた位置へ */
+  private poseBridge(br: (typeof this.bridges)[number], kinematic: boolean): void {
+    const a = br.angle;
+    const [, cy, cz] = br.deckCenter; // 蝶番から見た床板の中心（ローカル）
+    const rel: Vec3 = [0, cy * Math.cos(a) - cz * Math.sin(a), cy * Math.sin(a) + cz * Math.cos(a)];
+    const p = add(br.hinge, rotateY(rel, br.yaw));
+    // Rx(pitch)・Rx(a) = Rx(pitch + a)：入口側が上がる向き
+    const q = quatFromYawPitch(br.yaw, br.deckPitch + a);
+    if (kinematic) {
+      br.deck.setNextKinematicTranslation({ x: p[0], y: p[1], z: p[2] });
+      br.deck.setNextKinematicRotation(q);
+    } else {
+      br.deck.setTranslation({ x: p[0], y: p[1], z: p[2] }, false);
+      br.deck.setRotation(q, false);
+    }
+  }
+
+  /** 描画用：羽根車・可動橋・回転を伝える装置の角度 */
+  driveAngles(): { paddles: Map<string, number>; bridges: Map<string, number>; shafts: { input: Map<string, number>; output: Map<string, number> } } {
+    const paddleAngle = new Map(this.paddles.map((p) => [p.deviceId, p.angle]));
+    return {
+      paddles: paddleAngle,
+      bridges: new Map(this.bridges.map((b) => [b.deviceId, b.angle])),
+      shafts: solveDrive(this._layout.devices, this.shaftLinks, (id) => paddleAngle.get(id) ?? 0),
+    };
   }
 
   /** 描画用：バネごとの縮み量 */
@@ -323,6 +410,8 @@ export class Simulation {
     return {
       tick: this._tick,
       goals: this.goals.map((g) => ({ deviceId: g.deviceId, hits: g.hits, firstHitTick: g.firstHitTick, lastHitTick: g.lastHitTick })),
+      paddles: this.paddles.map((p) => ({ deviceId: p.deviceId, angle: p.angle, target: p.target, passes: p.passes })),
+      bridges: this.bridges.map((b) => ({ deviceId: b.deviceId, angle: b.angle, input: b.input })),
       springs: this.springs.map((sp) => ({
         deviceId: sp.deviceId,
         phase: sp.phase,
@@ -411,6 +500,11 @@ export class Simulation {
     this.launchers = [];
     this.springs = [];
     this.goals = [];
+    this.paddles = [];
+    this.bridges = [];
+    this.shaftLinks = findConnections(this._layout.devices)
+      .filter((c) => c.type === 'shaft')
+      .map((c) => ({ from: c.from.deviceId, to: c.to.deviceId }));
     this.nextBallId = 0;
 
     for (const box of this.labBoxes) {
@@ -427,6 +521,11 @@ export class Simulation {
 
     for (const track of this.tracks) this.addRailColliders(track);
     for (const d of this._layout.devices) if (d.type === 'curve') this.addCurveColliders(d);
+    for (const d of this._layout.devices) {
+      if (d.type === 'paddle') this.paddles.push({ deviceId: d.id, device: d, angle: 0, target: 0, passes: 0, inside: new Set() });
+      if (d.type === 'bridge') this.addBridge(d);
+      if (d.type === 'gearbox' || d.type === 'shaft') this.addDriveBox(d);
+    }
 
     for (const d of this._layout.devices) {
       if (d.type === 'goal') this.goals.push({ deviceId: d.id, device: d, hits: 0, firstHitTick: null, lastHitTick: null });
@@ -515,6 +614,38 @@ export class Simulation {
     const b = PLATE_EDGE_ROUNDING;
     const desc = isPlate ? R.ColliderDesc.roundCuboid(hx - b, hy - b, hz - b, b) : R.ColliderDesc.cuboid(hx, hy, hz);
     return desc.setTranslation(...part.offset).setFriction(MATERIAL.railFriction);
+  }
+
+  /** 可動橋：床板（レールと同じ断面）をキネマティックにして、出口側の蝶番で跳ね上げる */
+  private addBridge(d: PlacedDevice): void {
+    const R = this.R;
+    const track = buildRailTrack(d);
+    // 直線レールと同じく入口側を JOINT_DROP 下げた走行面（D-20）。蝶番は出口
+    const start: Vec3 = [track.start[0], track.start[1] - JOINT_DROP, track.start[2]];
+    const end = track.end;
+    const horiz = Math.hypot(end[0] - start[0], end[2] - start[2]);
+    const pitch = Math.atan2(start[1] - end[1], horiz);
+    const length = Math.hypot(horiz, end[1] - start[1]);
+    // 蝶番から見た床板の中心（ヨー回転前のローカル：z は前方）
+    const deckCenter: Vec3 = [0, (start[1] - end[1]) / 2, -horiz / 2];
+    const deck = this.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased());
+    railParts(length).forEach((part, i) => this.world.createCollider(this.trackPartDesc(part, i === 0), deck));
+    const br = { deviceId: d.id, device: d, deck, hinge: end, deckCenter, deckPitch: pitch, yaw: track.yawRad, angle: BRIDGE.openRad, input: 0 };
+    this.poseBridge(br, false);
+    this.bridges.push(br);
+  }
+
+  /** 歯車装置・軸：床に置く箱の当たり判定 */
+  private addDriveBox(d: PlacedDevice): void {
+    const R = this.R;
+    const f = footprint(d);
+    const body = this.world.createRigidBody(
+      R.RigidBodyDesc.fixed().setTranslation((f.minX + f.maxX) / 2, (f.minY + f.maxY) / 2, (f.minZ + f.maxZ) / 2),
+    );
+    this.world.createCollider(
+      R.ColliderDesc.cuboid((f.maxX - f.minX) / 2, (f.maxY - f.minY) / 2, (f.maxZ - f.minZ) / 2).setFriction(MATERIAL.floorFriction),
+      body,
+    );
   }
 
   /** カーブレール：弧に沿った走行面と側壁の三角形メッシュ */

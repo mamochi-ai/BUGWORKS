@@ -79,6 +79,47 @@ const PROTOTYPE_DEVICES: DeviceDef[] = [
     movingParts: [],
     prototypeOnly: true,
   },
+  {
+    // 羽根車：長さ1mのレールに羽根。軸ポートの高さは装置の高さによらず床から0.65m（drive.ts）
+    id: 'paddle',
+    name: '羽根車',
+    size: [1, 0.9, 1],
+    ports: [
+      { id: 'ball_in', type: 'ball', position: [0, 0.35, -0.5], direction: [0, 0, -1] },
+      { id: 'ball_out', type: 'ball', position: [0, 0.25, 0.5], direction: [0, 0, 1] },
+      { id: 'shaft_out', type: 'shaft', position: [0.75, 0.65, 0.5], direction: [0, 0, 1] },
+    ],
+    params: {},
+    movingParts: ['wheel'],
+    prototypeOnly: true,
+  },
+  {
+    // 軸：長さは設定で変える（ポートの z は長さの半分）
+    id: 'shaft',
+    name: '軸',
+    size: [0.2, 0.8, 1],
+    ports: [
+      { id: 'shaft_in', type: 'shaft', position: [0, 0.65, -0.5], direction: [0, 0, -1] },
+      { id: 'shaft_out', type: 'shaft', position: [0, 0.65, 0.5], direction: [0, 0, 1] },
+    ],
+    params: { lengthMeters: 1 },
+    movingParts: [],
+    prototypeOnly: true,
+  },
+  {
+    // 可動橋：直線レールと同じ長さ・高さ。軸ポートは入口側の横、床から0.65m
+    id: 'bridge',
+    name: '可動橋',
+    size: [0.5, 0.4, 2],
+    ports: [
+      { id: 'ball_in', type: 'ball', position: [0, 0.35, -1], direction: [0, 0, -1] },
+      { id: 'ball_out', type: 'ball', position: [0, 0.15, 1], direction: [0, 0, 1] },
+      { id: 'shaft_in', type: 'shaft', position: [0.75, 0.65, -1], direction: [0, 0, -1] },
+    ],
+    params: {},
+    movingParts: ['deck'],
+    prototypeOnly: true,
+  },
 ];
 
 /** 装置定義は reference/shiyou_specs/devices.v0.1.json を出典とする（マスター仕様 §3）。試作の追加分は別扱い */

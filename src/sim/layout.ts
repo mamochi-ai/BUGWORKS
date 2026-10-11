@@ -17,7 +17,7 @@ export interface PlacedDevice {
   params?: Record<string, number>;
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge';
 
 export interface SliceLayout {
   seed: number;
@@ -47,5 +47,27 @@ export const VERTICAL_SLICE_LAYOUT: SliceLayout = {
     // バネで打ち上げた球が上の段（高さ1m の台）に落ち、転がってゴールに入る
     { id: 'platform_1', type: 'platform', position: [0, 0, 4.75], rotationYDeg: 0, params: { heightMeters: 1 } },
     { id: 'goal_1', type: 'goal', position: [0, 1, 5], rotationYDeg: 0 },
+  ],
+};
+
+/**
+ * 見本「歯車で可動橋」（DECISIONS.md D-25）：
+ * 発射機 → レール → 羽根車 → レール → 可動橋 → 台の上のゴール。
+ * 羽根車の軸 → 歯車装置（2倍）→ 軸 → 可動橋。1個目の球が羽根車を 90° 回すと、2倍で 180° 伝わって橋が下りる。
+ * 1個目の球は橋が下りる前に着くので、すき間から落ちる。2個目からは橋を渡ってゴールへ。
+ */
+export const GEAR_SAMPLE_LAYOUT: SliceLayout = {
+  seed: 404,
+  devices: [
+    { id: 'launcher_1', type: 'launcher', position: [0, 0.6, -3.65], rotationYDeg: 0 },
+    { id: 'rail_1', type: 'rail', position: [0, 1.0, -2], rotationYDeg: 0 },
+    { id: 'paddle_1', type: 'paddle', position: [0, 0.8, -0.5], rotationYDeg: 0 },
+    { id: 'rail_2', type: 'rail', position: [0, 0.7, 1], rotationYDeg: 0 },
+    { id: 'bridge_1', type: 'bridge', position: [0, 0.5, 3], rotationYDeg: 0 },
+    // 歯車装置は 270° 回して入力を -Z、出力を +Z に向ける
+    { id: 'gearbox_1', type: 'gearbox', position: [0.75, 0, 0.75], rotationYDeg: 270, params: { gearRatio: 2 } },
+    { id: 'shaft_1', type: 'shaft', position: [0.75, 0, 1.75], rotationYDeg: 0, params: { lengthMeters: 0.5 } },
+    { id: 'platform_1', type: 'platform', position: [0, 0, 4.8], rotationYDeg: 0, params: { heightMeters: 0.4 } },
+    { id: 'goal_1', type: 'goal', position: [0, 0.4, 5], rotationYDeg: 0 },
   ],
 };

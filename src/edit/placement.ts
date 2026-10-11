@@ -1,6 +1,7 @@
 import { getDeviceDef, type Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { platformTop, platformHeight } from '../sim/goal';
+import { shaftLength } from '../sim/drive';
 import { localPort, portWorldPosition, rotateY } from '../sim/railGeometry';
 
 /**
@@ -8,7 +9,7 @@ import { localPort, portWorldPosition, rotateY } from '../sim/railGeometry';
  * 台そのものは常に床に置く。
  */
 export function restsOnSurface(type: PlacedDevice['type']): boolean {
-  return type === 'goal' || type === 'spring' || type === 'platform';
+  return type === 'goal' || type === 'spring' || type === 'platform' || type === 'gearbox' || type === 'shaft';
 }
 
 /** (x, z) の真下にある台の上面の高さ（無ければ 0 = 床） */
@@ -54,6 +55,7 @@ export interface PortRef {
 }
 
 export interface Connection {
+  type: 'ball' | 'shaft';
   /** 出口側（ball_out） */
   from: PortRef;
   /** 入口側（ball_in） */
@@ -97,8 +99,9 @@ export function snapToGrid(v: number): number {
 
 /** XZ 平面上の外形（90度単位の回転なので軸平行の箱で正確に表せる）と高さ範囲 */
 export function footprint(device: PlacedDevice): { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number } {
-  const [sx, defY, sz] = getDeviceDef(device.type).size;
+  const [sx, defY, defZ] = getDeviceDef(device.type).size;
   const sy = device.type === 'platform' ? platformHeight(device) : defY;
+  const sz = device.type === 'shaft' ? shaftLength(device) : defZ;
   const quarter = (((Math.round(device.rotationYDeg / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
   const [hx, hz] = quarter % 2 === 0 ? [sx / 2, sz / 2] : [sz / 2, sx / 2];
   const [x, y, z] = device.position;
@@ -137,31 +140,36 @@ export function ballPortRole(portId: string): 'in' | 'out' | null {
   return null;
 }
 
-/** 装置の ball 型ポートのうち、入口/出口のどちらかに当たるもの */
-export function ballPorts(device: PlacedDevice): { portId: string; role: 'in' | 'out' }[] {
+/** 接続の対象になるポート（ball・shaft の入口/出口）。signal はまだ扱わない */
+export function rolePorts(device: PlacedDevice): { portId: string; role: 'in' | 'out'; type: 'ball' | 'shaft' }[] {
   return getDeviceDef(device.type)
-    .ports.filter((p) => p.type === 'ball')
+    .ports.filter((p) => p.type === 'ball' || p.type === 'shaft')
     .flatMap((p) => {
       const role = ballPortRole(p.id);
-      return role ? [{ portId: p.id, role }] : [];
+      return role ? [{ portId: p.id, role, type: p.type as 'ball' | 'shaft' }] : [];
     });
+}
+
+/** 装置の ball 型ポートのうち、入口/出口のどちらかに当たるもの */
+export function ballPorts(device: PlacedDevice): { portId: string; role: 'in' | 'out' }[] {
+  return rolePorts(device).filter((p) => p.type === 'ball');
 }
 
 function linked(a: PlacedDevice, aPort: string, b: PlacedDevice, bPort: string): boolean {
   return samePoint(portWorldPosition(a, aPort), portWorldPosition(b, bPort)) && opposite(portWorldDirection(a, aPort), portWorldDirection(b, bPort));
 }
 
-/** ball ポートの組（出口→入口）。座標が一致し、向きが向かい合っていれば接続とみなす */
+/** 出口→入口のつながり（ball・shaft とも）。座標が一致し、向きが向かい合っていれば接続とみなす */
 export function findConnections(devices: readonly PlacedDevice[]): Connection[] {
   const out: Connection[] = [];
   for (const a of devices) {
-    for (const ap of ballPorts(a)) {
+    for (const ap of rolePorts(a)) {
       if (ap.role !== 'out') continue;
       for (const b of devices) {
         if (a.id === b.id) continue;
-        for (const bp of ballPorts(b)) {
-          if (bp.role === 'in' && linked(a, ap.portId, b, bp.portId)) {
-            out.push({ from: { deviceId: a.id, portId: ap.portId }, to: { deviceId: b.id, portId: bp.portId } });
+        for (const bp of rolePorts(b)) {
+          if (bp.role === 'in' && bp.type === ap.type && linked(a, ap.portId, b, bp.portId)) {
+            out.push({ type: ap.type, from: { deviceId: a.id, portId: ap.portId }, to: { deviceId: b.id, portId: bp.portId } });
           }
         }
       }
@@ -170,11 +178,11 @@ export function findConnections(devices: readonly PlacedDevice[]): Connection[] 
   return out;
 }
 
-/** 2台が ball ポートで接続されているか */
+/** 2台が ball / shaft ポートで接続されているか */
 export function areConnected(a: PlacedDevice, b: PlacedDevice): boolean {
-  for (const ap of ballPorts(a)) {
-    for (const bp of ballPorts(b)) {
-      if (ap.role === bp.role) continue;
+  for (const ap of rolePorts(a)) {
+    for (const bp of rolePorts(b)) {
+      if (ap.role === bp.role || ap.type !== bp.type) continue;
       if (linked(a, ap.portId, b, bp.portId)) return true;
     }
   }
@@ -217,17 +225,27 @@ export function evaluateMove(moving: PlacedDevice, desiredX: number, desiredZ: n
   let hint: { text: string; dist: number } | undefined;
 
   const pairs = (o: PlacedDevice) =>
-    ballPorts(moving).flatMap((m) => ballPorts(o).filter((t) => t.role !== m.role).map((t) => [m.portId, t.portId] as const));
+    rolePorts(moving).flatMap((m) =>
+      rolePorts(o)
+        .filter((t) => t.role !== m.role && t.type === m.type)
+        .map((t) => [m.portId, t.portId, m.type] as const),
+    );
 
   for (const o of others) {
-    for (const [mine, theirs] of pairs(o)) {
+    for (const [mine, theirs, type] of pairs(o)) {
       const target = portWorldPosition(o, theirs);
       // 回転は動かしている装置のまま、ポートが target に来る位置を求める
       const local = portWorldPosition({ ...moving, position: [0, 0, 0] }, mine);
-      const pos: Vec3 = [target[0] - local[0], target[1] - local[1], target[2] - local[2]];
+      // 軸は床から一定の高さを通すので、軸どうしの吸着では高さを変えない（面に乗る装置は面に合わせる）
+      const y = type === 'shaft' ? moving.position[1] : target[1] - local[1];
+      const pos: Vec3 = [target[0] - local[0], y, target[2] - local[2]];
       const dist = Math.hypot(pos[0] - desiredX, pos[2] - desiredZ);
       if (dist > PLACEMENT.snapRadius) continue;
-      const placed: PlacedDevice = { ...moving, position: pos };
+      const placed: PlacedDevice = seatOnSurface({ ...moving, position: pos }, others);
+      if (type === 'shaft' && !samePoint(portWorldPosition(placed, mine), target)) {
+        if (!hint || dist < hint.dist) hint = { text: `${o.id} とは軸の高さが合いません（歯車装置と軸は床に置いてください）`, dist };
+        continue;
+      }
       if (!opposite(portWorldDirection(placed, mine), portWorldDirection(o, theirs))) {
         if (!hint || dist < hint.dist) hint = { text: `${o.id} とは向きが合いません（回転してください）`, dist };
         continue;
