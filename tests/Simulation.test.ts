@@ -53,40 +53,44 @@ describe('Simulation（ヘッドレス）', () => {
     expect(s.snapshot()).toEqual(initial);
   });
 
-  it('鉄球はレール上を +Z 方向へ下り、レール幅からはみ出さない', () => {
+  it('最初の球はレール上を +Z 方向へ進み、レール幅からはみ出さない', () => {
     const s = make();
-    const z0 = s.readBall().position[2];
+    s.step();
+    const first = () => s.readBalls().find((b) => b.id === 0)!;
+    const z0 = first().position[2];
     const maxX = RAIL_PROFILE.innerWidth / 2 - BALL_RADIUS + 1e-3;
     const last = s.tracks[s.tracks.length - 1];
     let leftRailAt = -1;
     for (let i = 0; i < PHYSICS_HZ * 8; i++) {
       s.step();
-      const p = s.readBall().position;
+      const p = first().position;
       if (leftRailAt < 0 && p[2] > last.end[2]) leftRailAt = s.tick;
       if (leftRailAt < 0) expect(Math.abs(p[0])).toBeLessThanOrEqual(maxX);
     }
     expect(leftRailAt).toBeGreaterThan(0);
-    // 6m を数秒で下りきる（極端に速い/遅い挙動の検出）
-    expect(leftRailAt / PHYSICS_HZ).toBeGreaterThan(1);
-    expect(leftRailAt / PHYSICS_HZ).toBeLessThan(6);
-    expect(s.readBall().position[2]).toBeGreaterThan(z0 + 6);
+    // 発射速度 5m/s で 6m のレールを 1〜3 秒で抜ける（極端に速い/遅い挙動の検出）
+    expect(leftRailAt / PHYSICS_HZ).toBeGreaterThan(0.8);
+    expect(leftRailAt / PHYSICS_HZ).toBeLessThan(3);
+    expect(first().position[2]).toBeGreaterThan(z0 + 6);
   });
 
-  it('レールを出た鉄球は研究所の床に着地し、場外に落ちない', () => {
+  it('レールを出た鉄球は研究所の床に降り、場外に落ちない', () => {
     const s = make();
     run(s, PHYSICS_HZ * 20);
-    const p = s.readBall().position;
-    expect(s.outOfBounds).toBe(false);
-    expect(p[1]).toBeCloseTo(BALL_RADIUS, 2);
-    expect(Math.abs(p[0])).toBeLessThan(6);
-    expect(Math.abs(p[2])).toBeLessThan(6);
+    expect(s.lostBalls).toBe(0);
+    const first = s.readBalls().find((b) => b.id === 0)!;
+    expect(first.position[1]).toBeCloseTo(BALL_RADIUS, 1);
+    for (const b of s.readBalls()) {
+      expect(Math.abs(b.position[0])).toBeLessThan(6);
+      expect(Math.abs(b.position[2])).toBeLessThan(6);
+    }
   });
 
   it('値はすべて有限（NaN/Infinityなし）', () => {
     const s = make();
     for (const snap of run(s, PHYSICS_HZ * 10)) {
-      for (const v of [...snap.ball.position, ...snap.ball.linvel, ...snap.ball.angvel, ...snap.ball.rotation]) {
-        expect(Number.isFinite(v)).toBe(true);
+      for (const b of snap.balls) {
+        for (const v of [...b.position, ...b.linvel, ...b.angvel, ...b.rotation]) expect(Number.isFinite(v)).toBe(true);
       }
     }
   });

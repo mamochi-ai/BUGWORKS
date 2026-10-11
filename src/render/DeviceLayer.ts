@@ -1,22 +1,25 @@
 import * as THREE from 'three';
-import { footprint, type Connection, type PortRef } from '../edit/placement';
+import { ballPorts, footprint, type Connection, type PortRef } from '../edit/placement';
 import type { Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { buildRailTrack, portWorldPosition } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
-import { RailModelFactory } from './RailModel';
+import { LauncherModelFactory } from './LauncherModel';
+import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
 
 /**
- * レールの描画レイヤー。配置データ（PlacedDevice）だけから作り直せるので、編集・元に戻す・物理リセットのどれにも追従する。
+ * 装置（レール・鉄球発射機）の描画レイヤー。配置データ（PlacedDevice）だけから作り直せるので、編集・元に戻す・物理リセットのどれにも追従する。
  * - 変わっていないレールのメッシュは使い回す
  * - 編集モード（初期状態）では、つながっていないポートにオレンジの輪を出す
  * - ドラッグ中は対象レールだけを仮の位置に動かし、吸着先のポートを水色の輪で示す
  */
-export class RailLayer {
+export class DeviceLayer {
   readonly root = new THREE.Group();
-  private readonly factory = new RailModelFactory();
+  private readonly mats = createDeviceMaterials();
+  private readonly railFactory = new RailModelFactory(this.mats);
+  private readonly launcherFactory = new LauncherModelFactory(this.mats);
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
   private readonly supports = new THREE.Group();
   private readonly markers = new THREE.Group();
@@ -32,7 +35,7 @@ export class RailLayer {
   private editMode = true;
 
   constructor() {
-    this.root.name = 'rails';
+    this.root.name = 'devices';
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
     this.outline = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: COLOR.selected, depthTest: false, transparent: true }));
     this.outline.renderOrder = 10;
@@ -56,7 +59,7 @@ export class RailLayer {
       const existing = this.rails.get(d.id);
       if (existing?.key === key) continue;
       if (existing) this.disposeRail(existing.group);
-      const group = this.factory.createRail(buildRailTrack(d));
+      const group = d.type === 'rail' ? this.railFactory.createRail(buildRailTrack(d)) : this.launcherFactory.create(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
       this.rails.set(d.id, { key, group });
@@ -87,10 +90,15 @@ export class RailLayer {
   preview(device: PlacedDevice, valid: boolean, snapTo: PortRef | null): void {
     const r = this.rails.get(device.id);
     if (!r) return;
-    const track = buildRailTrack(device);
-    r.group.position.set((track.start[0] + track.end[0]) / 2, (track.start[1] + track.end[1]) / 2, (track.start[2] + track.end[2]) / 2);
-    const q = quatFromYawPitch(track.yawRad, track.pitch);
-    r.group.quaternion.set(q.x, q.y, q.z, q.w);
+    if (device.type === 'rail') {
+      const track = buildRailTrack(device);
+      r.group.position.set((track.start[0] + track.end[0]) / 2, (track.start[1] + track.end[1]) / 2, (track.start[2] + track.end[2]) / 2);
+      const q = quatFromYawPitch(track.yawRad, track.pitch);
+      r.group.quaternion.set(q.x, q.y, q.z, q.w);
+    } else {
+      r.group.position.set(...device.position);
+      r.group.rotation.set(0, (device.rotationYDeg * Math.PI) / 180, 0);
+    }
     r.key = ''; // 次の sync で作り直す
     const others = this.devices.filter((d) => d.id !== device.id);
     this.rebuildSupports([...others, device]);
@@ -113,14 +121,16 @@ export class RailLayer {
 
   private rebuildSupports(devices: readonly PlacedDevice[]): void {
     this.supports.clear();
-    const seen = new Set<string>();
+    const key = (p: Vec3) => p.map((v) => v.toFixed(3)).join(',');
+    // 発射機の出口は発射機自身が支えるので、そこに支柱は立てない
+    const seen = new Set<string>(devices.filter((d) => d.type === 'launcher').map((d) => key(portWorldPosition(d, 'ball_out'))));
     for (const d of devices) {
+      if (d.type !== 'rail') continue;
       for (const portId of ['ball_in', 'ball_out']) {
         const p = portWorldPosition(d, portId);
-        const key = p.map((v) => v.toFixed(3)).join(',');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const s = this.factory.createSupport(p);
+        if (seen.has(key(p))) continue;
+        seen.add(key(p));
+        const s = this.railFactory.createSupport(p);
         if (s) this.supports.add(s);
       }
     }
@@ -130,11 +140,19 @@ export class RailLayer {
     this.markers.clear();
     const linked = new Set(connections.flatMap((c) => [`${c.from.deviceId}/${c.from.portId}`, `${c.to.deviceId}/${c.to.portId}`]));
     for (const d of devices) {
-      for (const portId of ['ball_in', 'ball_out']) {
+      for (const { portId } of ballPorts(d)) {
         const isSnap = snapTo?.deviceId === d.id && snapTo.portId === portId;
         if (linked.has(`${d.id}/${portId}`) && !isSnap) continue;
         this.markers.add(this.ring(portWorldPosition(d, portId), (d.rotationYDeg * Math.PI) / 180, isSnap));
       }
+    }
+  }
+
+  /** 発射機のばねの縮み（charge: deviceId → 0..1） */
+  setLauncherCharge(charge: ReadonlyMap<string, number>): void {
+    for (const [id, c] of charge) {
+      const r = this.rails.get(id);
+      if (r) LauncherModelFactory.setCharge(r.group, c);
     }
   }
 
@@ -149,7 +167,7 @@ export class RailLayer {
   private disposeRail(group: THREE.Group): void {
     this.root.remove(group);
     group.traverse((o) => {
-      if (o instanceof THREE.Mesh && o.geometry.userData.ownedByRail) o.geometry.dispose();
+      if (o instanceof THREE.Mesh && o.geometry.userData.ownedByDevice) o.geometry.dispose();
     });
   }
 }

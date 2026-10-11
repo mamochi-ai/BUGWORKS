@@ -92,6 +92,8 @@ html, body {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; touch-action: manipulation;
 }
 .edit button i { font-style: normal; font-size: 17px; }
+.edit button span { white-space: nowrap; }
+.edit .row button { font-size: 13px; gap: 4px; padding: 4px 6px; }
 .edit button:disabled { opacity: 0.38; cursor: default; }
 .edit button:not(:disabled):active { background: #30363e; }
 .edit button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }

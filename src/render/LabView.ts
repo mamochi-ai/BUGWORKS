@@ -3,7 +3,7 @@ import type { BallState, Simulation } from '../sim/Simulation';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
-import { RailLayer } from './RailLayer';
+import { DeviceLayer } from './DeviceLayer';
 
 /**
  * 物理状態を読むだけの描画層。物理ワールドへは書き込まない。
@@ -12,9 +12,12 @@ import { RailLayer } from './RailLayer';
 export class LabView {
   readonly scene = new THREE.Scene();
   readonly renderer: THREE.WebGLRenderer;
-  /** レール（編集に追従して作り直す） */
-  readonly rails = new RailLayer();
-  private ball: THREE.Mesh;
+  /** 装置（編集に追従して作り直す） */
+  readonly devices = new DeviceLayer();
+  /** 鉄球のメッシュ（発射された分だけ使い回す） */
+  private ballPool: THREE.Mesh[] = [];
+  private ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 16);
+  private ballMat!: THREE.MeshStandardMaterial;
   private tmpQa = new THREE.Quaternion();
   private tmpQb = new THREE.Quaternion();
 
@@ -37,9 +40,8 @@ export class LabView {
     pmrem.dispose();
     this.addLights();
     this.addLab();
-    this.scene.add(this.rails.root);
-    this.ball = this.makeBall();
-    this.scene.add(this.ball);
+    this.scene.add(this.devices.root);
+    this.ballMat = this.makeBallMaterial();
   }
 
   get canvas(): HTMLCanvasElement {
@@ -54,17 +56,30 @@ export class LabView {
 
   /** alpha: 前tick→現tickの補間係数（描画は可変FPS、物理は固定120Hz） */
   render(camera: THREE.Camera, alpha: number): void {
-    this.applyBall(this.sim.readPrevBall(), this.sim.readBall(), alpha);
+    this.devices.setLauncherCharge(launcherCharge(this.sim));
+    const frames = this.sim.readBallFrames();
+    while (this.ballPool.length < frames.length) {
+      const m = new THREE.Mesh(this.ballGeo, this.ballMat);
+      m.castShadow = true;
+      m.name = 'steel_ball';
+      this.scene.add(m);
+      this.ballPool.push(m);
+    }
+    this.ballPool.forEach((m, i) => {
+      const f = frames[i];
+      m.visible = !!f;
+      if (f) this.applyBall(m, f.prev, f.curr, alpha);
+    });
     this.renderer.render(this.scene, camera);
   }
 
-  private applyBall(prev: BallState, curr: BallState, alpha: number): void {
+  private applyBall(mesh: THREE.Mesh, prev: BallState, curr: BallState, alpha: number): void {
     const a = prev.position;
     const b = curr.position;
-    this.ball.position.set(a[0] + (b[0] - a[0]) * alpha, a[1] + (b[1] - a[1]) * alpha, a[2] + (b[2] - a[2]) * alpha);
+    mesh.position.set(a[0] + (b[0] - a[0]) * alpha, a[1] + (b[1] - a[1]) * alpha, a[2] + (b[2] - a[2]) * alpha);
     this.tmpQa.set(...prev.rotation);
     this.tmpQb.set(...curr.rotation);
-    this.ball.quaternion.slerpQuaternions(this.tmpQa, this.tmpQb, alpha);
+    mesh.quaternion.slerpQuaternions(this.tmpQa, this.tmpQb, alpha);
   }
 
   private addLights(): void {
@@ -121,7 +136,7 @@ export class LabView {
     wall.add(strip);
   }
 
-  private makeBall(): THREE.Mesh {
+  private makeBallMaterial(): THREE.MeshStandardMaterial {
     // 転がりが見えるよう帯模様のテクスチャを付ける（画像素材は使わずCanvasで生成）
     const c = document.createElement('canvas');
     c.width = 128;
@@ -134,12 +149,16 @@ export class LabView {
     g.fillRect(60, 0, 8, 64);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(BALL_RADIUS, 32, 16),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25, metalness: 0.9 }),
-    );
-    mesh.castShadow = true;
-    mesh.name = 'steel_ball';
-    return mesh;
+    return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25, metalness: 0.9 });
   }
+}
+
+/** 次の発射までの溜め具合（0=撃った直後, 1=発射直前）。初期状態では 0 */
+function launcherCharge(sim: Simulation): Map<string, number> {
+  const m = new Map<string, number>();
+  const states = sim.snapshotLaunchers();
+  for (const l of states) {
+    m.set(l.deviceId, sim.tick === 0 ? 0 : 1 - Math.max(0, l.nextFireTick - sim.tick) / l.periodTicks);
+  }
+  return m;
 }

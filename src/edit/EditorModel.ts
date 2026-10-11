@@ -1,4 +1,4 @@
-import type { PlacedDevice, SliceLayout } from '../sim/layout';
+import type { DeviceType, PlacedDevice, SliceLayout } from '../sim/layout';
 import {
   PLACEMENT,
   PROBLEM_TEXT,
@@ -82,11 +82,11 @@ export class EditorModel {
     this.emit('selection');
   }
 
-  /** レールを追加する。near 付近の空き場所に置き、選択状態にする */
-  addRail(nearX: number, nearZ: number): string | null {
+  /** 装置を追加する。near 付近の空き場所に置き、選択状態にする */
+  addDevice(type: DeviceType, nearX: number, nearZ: number): string | null {
     if (this._devices.length >= PLACEMENT.maxDevices) return this.fail(PROBLEM_TEXT.too_many);
-    const id = this.nextId('rail');
-    const spot = findFreeSpot({ id, type: 'rail', position: [nearX, 0, nearZ], rotationYDeg: 0 }, nearX, nearZ, this._devices);
+    const id = this.nextId(type);
+    const spot = findFreeSpot({ id, type, position: [nearX, 0, nearZ], rotationYDeg: 0 }, nearX, nearZ, this._devices);
     if (!spot) return this.fail('空いている場所がありません');
     this.commit([...this._devices, spot], `${id} を追加しました`);
     this.select(id);

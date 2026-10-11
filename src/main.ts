@@ -25,21 +25,21 @@ async function boot(): Promise<void> {
   new EditPanel(hudRoot, { editor, ctl, addPosition: () => ({ x: rig.controls.target.x, z: rig.controls.target.z }) });
 
   // 配置が変わったら物理を作り直し、描画を追従させる
-  const syncRails = () => view.rails.sync(editor.devices, editor.connections(), editor.selectedId);
+  const syncRails = () => view.devices.sync(editor.devices, editor.connections(), editor.selectedId);
   editor.onChange((kind) => {
     if (kind === 'layout') {
       ctl.applyLayout(editor.layout);
       syncRails();
     } else if (kind === 'selection') {
-      view.rails.setSelected(editor.selectedId);
+      view.devices.setSelected(editor.selectedId);
     }
   });
-  ctl.onChange(() => view.rails.setEditMode(ctl.state === 'ready'));
+  ctl.onChange(() => view.devices.setEditMode(ctl.state === 'ready'));
   syncRails();
-  view.rails.setEditMode(true);
+  view.devices.setEditMode(true);
 
   // 部品に触れたら部品操作、何もない所ならカメラ操作
-  new PartDragController(viewport, view.canvas, rig.camera, rig.controls, () => view.rails.pickables, {
+  new PartDragController(viewport, view.canvas, rig.camera, rig.controls, () => view.devices.pickables, {
     onPick: (id) => {
       ctl.ensureEditable();
       editor.select(id);
@@ -51,7 +51,7 @@ async function boot(): Promise<void> {
     },
     onDrag: (id, x, z) => {
       const ev = editor.previewMove(id, x, z);
-      if (ev) view.rails.preview(ev.device, ev.ok, ev.snap?.other ?? null);
+      if (ev) view.devices.preview(ev.device, ev.ok, ev.snap?.other ?? null);
     },
     onDrop: (id, x, z) => {
       const ev = editor.previewMove(id, x, z);

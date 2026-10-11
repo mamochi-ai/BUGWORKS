@@ -26,6 +26,7 @@ export class EditPanel {
     panel.innerHTML = `
       <h2>装置</h2>
       <button type="button" data-e="add-rail" class="add"><i>＋</i><span>${getDeviceDef('rail').name}</span></button>
+      <button type="button" data-e="add-launcher" class="add"><i>＋</i><span>${getDeviceDef('launcher').name}</span></button>
       <div class="sel" data-k="sel"></div>
       <div class="row">
         <button type="button" data-e="rotate" aria-label="回転"><i>⟳</i><span>回転</span></button>
@@ -74,9 +75,10 @@ export class EditPanel {
     if (needsSel && !id) return;
     ctl.ensureEditable();
     switch (action) {
-      case 'add-rail': {
+      case 'add-rail':
+      case 'add-launcher': {
         const p = this.deps.addPosition();
-        editor.addRail(p.x, p.z);
+        editor.addDevice(action === 'add-rail' ? 'rail' : 'launcher', p.x, p.z);
         break;
       }
       case 'rotate':

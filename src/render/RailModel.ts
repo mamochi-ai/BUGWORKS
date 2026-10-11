@@ -11,10 +11,37 @@ import { railVisualProfile } from './railVisualProfile';
  * 鋼管4本＋両端のオレンジ金具＋支柱をプリミティブから組む。画像は読み込まない。
  * 当たり判定は Simulation 側の箱形状のままで、この形状は描画専用。
  */
+export interface RailMaterials {
+  steel: THREE.MeshStandardMaterial;
+  paint: THREE.MeshStandardMaterial;
+  dark: THREE.MeshStandardMaterial;
+  bolt: THREE.MeshStandardMaterial;
+  bearing: THREE.MeshStandardMaterial;
+  /** タッチ用の当たり判定（描画しない） */
+  pick: THREE.MeshBasicMaterial;
+}
+
+/** 装置で共有する材質（レールと発射機で同じ塗装・鋼材を使う） */
+export function createDeviceMaterials(): RailMaterials {
+  const wear = makeWearTexture();
+  return {
+    steel: new THREE.MeshStandardMaterial({ color: PALETTE.railSteel, metalness: 0.95, roughness: 0.32 }),
+    paint: new THREE.MeshStandardMaterial({
+      color: PALETTE.railWall,
+      metalness: 0.25,
+      roughness: 0.55,
+      roughnessMap: wear,
+      map: wear,
+    }),
+    dark: new THREE.MeshStandardMaterial({ color: PALETTE.railLeg, metalness: 0.7, roughness: 0.5 }),
+    bolt: new THREE.MeshStandardMaterial({ color: 0x9aa1aa, metalness: 0.9, roughness: 0.35 }),
+    bearing: new THREE.MeshStandardMaterial({ color: 0x2a2e33, metalness: 0.8, roughness: 0.4 }),
+    pick: new THREE.MeshBasicMaterial({ visible: false }),
+  };
+}
+
 export class RailModelFactory {
   private readonly profile = railVisualProfile();
-  private readonly pickMaterial = new THREE.MeshBasicMaterial({ visible: false });
-  private readonly mats: Record<'steel' | 'paint' | 'dark' | 'bolt' | 'bearing', THREE.MeshStandardMaterial>;
   private readonly geo: {
     cheek: THREE.BufferGeometry;
     crossbar: THREE.BufferGeometry;
@@ -26,22 +53,7 @@ export class RailModelFactory {
     legClamp: THREE.BufferGeometry;
   };
 
-  constructor() {
-    const wear = makeWearTexture();
-    this.mats = {
-      steel: new THREE.MeshStandardMaterial({ color: PALETTE.railSteel, metalness: 0.95, roughness: 0.32 }),
-      paint: new THREE.MeshStandardMaterial({
-        color: PALETTE.railWall,
-        metalness: 0.25,
-        roughness: 0.55,
-        roughnessMap: wear,
-        map: wear,
-      }),
-      dark: new THREE.MeshStandardMaterial({ color: PALETTE.railLeg, metalness: 0.7, roughness: 0.5 }),
-      bolt: new THREE.MeshStandardMaterial({ color: 0x9aa1aa, metalness: 0.9, roughness: 0.35 }),
-      bearing: new THREE.MeshStandardMaterial({ color: 0x2a2e33, metalness: 0.8, roughness: 0.4 }),
-    };
-
+  constructor(private readonly mats: RailMaterials) {
     const c = this.profile.collar;
     this.geo = {
       cheek: new RoundedBoxGeometry(c.cheekWidth, c.height, c.length, 3, 0.012),
@@ -65,7 +77,7 @@ export class RailModelFactory {
     group.quaternion.set(q.x, q.y, q.z, q.w);
 
     const tube = new THREE.CylinderGeometry(1, 1, track.length, 16).rotateX(Math.PI / 2);
-    tube.userData.ownedByRail = true; // レール削除時に破棄する（他は共有ジオメトリ）
+    tube.userData.ownedByDevice = true; // レール削除時に破棄する（他は共有ジオメトリ）
     for (const side of [-1, 1]) {
       group.add(this.mesh(tube, this.mats.steel, [side * p.carrier.x, p.carrier.y, 0], p.carrier.radius));
       group.add(this.mesh(tube, this.mats.steel, [side * p.guard.x, p.guard.y, 0], p.guard.radius));
@@ -74,8 +86,8 @@ export class RailModelFactory {
       group.add(this.createCollar(end * (track.length / 2 - p.collar.length / 2)));
     }
     // タッチ用の当たり判定（描画しない）。鋼管の隙間を指が素通りしないよう、外形より少し大きい箱
-    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, track.length), this.pickMaterial);
-    pick.geometry.userData.ownedByRail = true;
+    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.45, track.length), this.mats.pick);
+    pick.geometry.userData.ownedByDevice = true;
     pick.position.y = 0.07;
     pick.name = 'pick_proxy';
     group.add(pick);

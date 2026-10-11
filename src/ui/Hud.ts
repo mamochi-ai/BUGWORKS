@@ -1,4 +1,5 @@
 import { PHYSICS_HZ } from '../sim/constants';
+import { MAX_BALLS } from '../sim/launcher';
 import type { RunState, SimulationController } from '../sim/SimulationController';
 
 /** 状態は色だけでなく記号とテキストでも示す（マスター仕様 §8 アクセシビリティ） */
@@ -32,7 +33,7 @@ export class Hud {
       <section class="readout" aria-label="計測値">
         <div><span>tick</span><b data-k="tick">0</b></div>
         <div><span>時間</span><b data-k="time">0.00 s</b></div>
-        <div><span>球速</span><b data-k="speed">0.00 m/s</b></div>
+        <div><span>球数</span><b data-k="balls">0 / ${MAX_BALLS}</b></div>
         <div><span>描画</span><b data-k="fps">– fps</b></div>
         <div><span>物理</span><b data-k="tps">– tick/s</b></div>
         <div><span>物理負荷</span><b data-k="pms">– ms</b></div>
@@ -97,16 +98,20 @@ export class Hud {
 
   update(stats: HudStats): void {
     const sim = this.ctl.sim;
-    const b = sim.readBall();
     this.el.tick.textContent = String(sim.tick);
     this.el.time.textContent = `${sim.timeSeconds.toFixed(2)} s`;
-    this.el.speed.textContent = `${Math.hypot(...b.linvel).toFixed(2)} m/s`;
+    this.el.balls.textContent = `${sim.ballCount} / ${MAX_BALLS}`;
     this.el.fps.textContent = `${stats.fps.toFixed(0)} fps`;
     this.el.tps.textContent = `${stats.ticksPerSecond.toFixed(0)} tick/s`;
     this.el.pms.textContent = `${stats.physicsMsPerFrame.toFixed(2)} ms`;
-    const warn = sim.outOfBounds
-      ? '⚠ 鉄球が場外に落ちました。リセットしてください。'
-      : stats.droppedSeconds > 0
+    const waiting = sim.launcherWaiting;
+    const warn = waiting === 'max_balls'
+      ? `⚠ 球が上限（${MAX_BALLS}個）に達したため、発射を止めています`
+      : waiting === 'blocked'
+        ? '⚠ 発射口に球が残っているため、発射を待っています'
+        : sim.lostBalls > 0
+          ? `⚠ 場外に落ちた球を ${sim.lostBalls} 個取り除きました`
+          : stats.droppedSeconds > 0
         ? '⚠ 処理落ち：一部のシミュレーション時間を省略しました'
         : '';
     this.el.warn.hidden = warn === '';
