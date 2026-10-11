@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PHYSICS_HZ } from '../src/sim/constants';
-import { VERTICAL_SLICE_LAYOUT } from '../src/sim/layout';
+import { FLOOR_CHAIN } from './fixtures';
 import { BALL_RADIUS, RAIL_PROFILE } from '../src/sim/railGeometry';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation, type SimSnapshot } from '../src/sim/Simulation';
@@ -9,7 +9,7 @@ import { SimulationController } from '../src/sim/SimulationController';
 let R: Rapier;
 const sims: Simulation[] = [];
 const make = () => {
-  const s = new Simulation(R, VERTICAL_SLICE_LAYOUT);
+  const s = new Simulation(R, FLOOR_CHAIN);
   sims.push(s);
   return s;
 };

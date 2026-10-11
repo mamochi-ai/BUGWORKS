@@ -5,6 +5,7 @@ import type { PlacedDevice } from '../sim/layout';
 import { LAUNCHER_SHAPE } from '../sim/launcher';
 import { railParts } from '../sim/Simulation';
 import type { RailMaterials } from './RailModel';
+import { addLegs } from './SpringModel';
 
 /**
  * 鉄球発射機の見た目（試作）。デザイン画 launcher_base / launcher_arm / coil_spring を参考に組む。
@@ -115,6 +116,8 @@ export class LauncherModelFactory {
     neck.scale.set(0.6, S.hopperDrop - 0.05, 0.6);
     neck.position.set(-0.19, S.surfaceY + (S.hopperDrop - 0.05) / 2 + 0.05, S.loadZ);
     g.add(hopper, rim, neck);
+
+    addLegs(g, device.position[1], bw / 2 - 0.13, bd / 2 - 0.13 + 0.0, this.mats);
 
     // タッチ用の当たり判定（描画しない）
     const [sx, sy, sz] = getDeviceDef('launcher').size;

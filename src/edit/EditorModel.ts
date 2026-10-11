@@ -136,6 +136,13 @@ export class EditorModel {
     );
   }
 
+  /** 装置のパラメータを変える（元に戻せる） */
+  setParam(id: string, key: string, value: number, label: string): boolean {
+    const d = this.find(id);
+    if (!d) return false;
+    return this.tryReplace({ ...d, params: { ...(d.params ?? {}), [key]: value } }, `${id} の${label}を ${value} にしました`, '変更できません');
+  }
+
   remove(id: string): boolean {
     if (!this.find(id)) return false;
     this.commit(

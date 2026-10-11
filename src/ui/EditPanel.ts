@@ -1,5 +1,6 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
+import { SPRING_TILTS, springParams } from '../sim/spring';
 import type { SimulationController } from '../sim/SimulationController';
 
 export interface EditPanelDeps {
@@ -27,6 +28,7 @@ export class EditPanel {
       <h2>装置</h2>
       <button type="button" data-e="add-rail" class="add"><i>＋</i><span>${getDeviceDef('rail').name}</span></button>
       <button type="button" data-e="add-launcher" class="add"><i>＋</i><span>${getDeviceDef('launcher').name}</span></button>
+      <button type="button" data-e="add-spring" class="add"><i>＋</i><span>${getDeviceDef('spring').name}</span></button>
       <div class="sel" data-k="sel"></div>
       <div class="row">
         <button type="button" data-e="rotate" aria-label="回転"><i>⟳</i><span>回転</span></button>
@@ -36,6 +38,7 @@ export class EditPanel {
         <button type="button" data-e="up" aria-label="高さを上げる"><i>▲</i><span>上げる</span></button>
         <button type="button" data-e="down" aria-label="高さを下げる"><i>▼</i><span>下げる</span></button>
       </div>
+      <button type="button" data-e="tilt" class="param" aria-label="天板の傾き" hidden></button>
       <div class="row">
         <button type="button" data-e="undo" aria-label="元に戻す"><i>↶</i><span>戻す</span></button>
         <button type="button" data-e="redo" aria-label="やり直す"><i>↷</i><span>やり直し</span></button>
@@ -71,14 +74,23 @@ export class EditPanel {
   private run(action: string): void {
     const { editor, ctl } = this.deps;
     const id = editor.selectedId;
-    const needsSel = ['rotate', 'delete', 'up', 'down'].includes(action);
+    const needsSel = ['rotate', 'delete', 'up', 'down', 'tilt'].includes(action);
     if (needsSel && !id) return;
     ctl.ensureEditable();
     switch (action) {
       case 'add-rail':
-      case 'add-launcher': {
+      case 'add-launcher':
+      case 'add-spring': {
         const p = this.deps.addPosition();
-        editor.addDevice(action === 'add-rail' ? 'rail' : 'launcher', p.x, p.z);
+        editor.addDevice(action === 'add-rail' ? 'rail' : action === 'add-launcher' ? 'launcher' : 'spring', p.x, p.z);
+        break;
+      }
+      case 'tilt': {
+        const sel = editor.selected;
+        if (sel?.type !== 'spring') break;
+        const cur = springParams(sel).tiltDegrees;
+        const i = SPRING_TILTS.indexOf(cur as (typeof SPRING_TILTS)[number]);
+        editor.setParam(id!, 'tiltDegrees', SPRING_TILTS[(i + 1) % SPRING_TILTS.length], '天板の傾き');
         break;
       }
       case 'rotate':
@@ -109,6 +121,9 @@ export class EditPanel {
       ? `選択中：${getDeviceDef(sel.type).name} ${sel.id}（高さ ${sel.position[1].toFixed(1)}m・${sel.rotationYDeg}°）`
       : '部品をタップすると選択できます';
     for (const k of ['rotate', 'delete', 'up', 'down']) (this.el[k] as HTMLButtonElement).disabled = !sel;
+    const tilt = this.el.tilt as HTMLButtonElement;
+    tilt.hidden = sel?.type !== 'spring';
+    if (sel?.type === 'spring') tilt.innerHTML = `<i>◢</i><span>天板の傾き ${springParams(sel).tiltDegrees}°（タップで変更）</span>`;
     (this.el.undo as HTMLButtonElement).disabled = !editor.canUndo;
     (this.el.redo as HTMLButtonElement).disabled = !editor.canRedo;
     const m = editor.message;

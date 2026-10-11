@@ -1,12 +1,13 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { PHYSICS_HZ } from '../src/sim/constants';
 import { LAUNCHER_SHAPE, MAX_BALLS, RELOAD_SECONDS, launcherParams, planLauncher, plungerCompression } from '../src/sim/launcher';
-import { VERTICAL_SLICE_LAYOUT, type PlacedDevice } from '../src/sim/layout';
+import type { PlacedDevice } from '../src/sim/layout';
+import { FLOOR_CHAIN } from './fixtures';
 import { BALL_RADIUS, buildRailTrack, portWorldPosition } from '../src/sim/railGeometry';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
 
-const base = VERTICAL_SLICE_LAYOUT.devices;
+const base = FLOOR_CHAIN.devices;
 const launcher = base.find((d) => d.type === 'launcher')!;
 const lone = (params?: Record<string, number>): PlacedDevice => ({ id: 'L', type: 'launcher', position: [0, 0, 0], rotationYDeg: 0, params });
 
