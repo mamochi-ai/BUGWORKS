@@ -74,9 +74,10 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   await ip.screenshot({ path: out + '/ipad_running.png' });
   const sizes = await ip.$$eval('.controls button', bs => bs.map(b => { const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
   console.log('button sizes', JSON.stringify(sizes));
-  // ---- iPhone-ish narrow layout sanity
+  await ctx.close(); // 前のページを閉じてから次を開く（ソフトウェア描画でCPUを奪い合わないように）
+  // ---- iPad Mini（縦向き）のレイアウト確認
   const ctx2 = await browser.newContext({ ...devices['iPad Mini'] });
-  const pm = await ctx2.newPage(); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks); await pm.waitForTimeout(400);
+  const pm = await ctx2.newPage(); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.waitForTimeout(400);
   await pm.screenshot({ path: out + '/ipad_mini_portrait.png' });
   console.log('errors:', errors.length ? errors : 'none');
   await browser.close();
