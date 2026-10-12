@@ -9,6 +9,7 @@ import { curveMesh, curveTurn } from './curveGeometry';
 import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel } from './magnet';
+import { inSwitchZone, signalSources } from './switch';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -83,6 +84,13 @@ export interface BridgeState {
   input: number;
 }
 
+export interface SwitchState {
+  deviceId: string;
+  on: boolean;
+  /** 切り替わった回数 */
+  toggles: number;
+}
+
 export interface SimSnapshot {
   tick: number;
   paddles: PaddleState[];
@@ -91,6 +99,7 @@ export interface SimSnapshot {
   springs: SpringState[];
   balls: BallSnapshot[];
   launchers: LauncherState[];
+  switches: SwitchState[];
   /** 場外に落ちて取り除いた球の数 */
   lostBalls: number;
 }
@@ -133,6 +142,9 @@ export class Simulation {
   private bridges: (BridgeState & { device: PlacedDevice; deck: RigidBody; hinge: Vec3; deckCenter: Vec3; deckPitch: number; yaw: number })[] = [];
   private shaftLinks: ShaftLink[] = [];
   private magnets: PlacedDevice[] = [];
+  private switches: (SwitchState & { device: PlacedDevice; inside: Set<number> })[] = [];
+  /** 信号を受ける装置ID → 配線されたスイッチID */
+  private signalFrom = new Map<string, string[]>();
   private nextBallId = 0;
   private _tick = 0;
   private _lostBalls = 0;
@@ -164,7 +176,7 @@ export class Simulation {
 
   private applyTracks(): void {
     // 固定の直線走行路：レールと羽根車（可動橋は動くので別に作る）
-    this._tracks = this._layout.devices.filter((d) => d.type === 'rail' || d.type === 'paddle').map(buildRailTrack);
+    this._tracks = this._layout.devices.filter((d) => d.type === 'rail' || d.type === 'paddle' || d.type === 'switch').map(buildRailTrack);
   }
 
   get tick(): number {
@@ -204,8 +216,11 @@ export class Simulation {
    */
   step(): void {
     for (const b of this.balls) b.prev = readBody(b.body);
+    this.stepSwitches();
     for (const l of this.launchers) {
-      if (this._tick >= l.nextFireTick) {
+      // 配線された発射機は信号が ON の間だけ撃つ（OFF の間は発射を待たせ、ON になったらすぐ撃つ）
+      if (!this.signalOn(l.deviceId)) l.nextFireTick = Math.max(l.nextFireTick, this._tick + 1);
+      else if (this._tick >= l.nextFireTick) {
         l.nextFireTick += l.periodTicks;
         this.fire(l);
       }
@@ -436,6 +451,7 @@ export class Simulation {
         heldAt: sp.heldAt ? [sp.heldAt[0], sp.heldAt[1], sp.heldAt[2]] : null,
         launches: sp.launches,
       })),
+      switches: this.switches.map((s) => ({ deviceId: s.deviceId, on: s.on, toggles: s.toggles })),
       balls: this.readBalls(),
       launchers: this.launchers.map((l) => ({
         deviceId: l.deviceId,
@@ -518,6 +534,10 @@ export class Simulation {
     this.goals = [];
     this.paddles = [];
     this.magnets = this._layout.devices.filter((d) => d.type === 'magnet');
+    this.switches = this._layout.devices
+      .filter((d) => d.type === 'switch')
+      .map((d) => ({ deviceId: d.id, device: d, on: false, toggles: 0, inside: new Set<number>() }));
+    this.signalFrom = signalSources(this._layout.devices);
     this.bridges = [];
     this.shaftLinks = findConnections(this._layout.devices)
       .filter((c) => c.type === 'shaft')
@@ -652,6 +672,35 @@ export class Simulation {
     this.bridges.push(br);
   }
 
+  /** スイッチ：範囲に入ってきた球（前のtickにはいなかった球）ごとに ON/OFF を切り替える */
+  private stepSwitches(): void {
+    for (const s of this.switches) {
+      const now = new Set<number>();
+      for (const b of this.balls) {
+        const t = b.body.translation();
+        if (inSwitchZone(s.device, [t.x, t.y, t.z])) now.add(b.id);
+      }
+      for (const id of now) {
+        if (s.inside.has(id)) continue;
+        s.on = !s.on;
+        s.toggles++;
+      }
+      s.inside = now;
+    }
+  }
+
+  /** 信号が ON か。配線が無い装置は常に ON（今までどおり動く） */
+  private signalOn(deviceId: string): boolean {
+    const from = this.signalFrom.get(deviceId);
+    if (!from) return true;
+    return this.switches.some((s) => s.on && from.includes(s.deviceId));
+  }
+
+  /** 描画用：スイッチの ON/OFF */
+  switchStates(): Map<string, boolean> {
+    return new Map(this.switches.map((s) => [s.deviceId, s.on]));
+  }
+
   /** 磁石：範囲内の鉄球に力を加える（配置順・球の順に固定。決定論のため力は速度の変化として直接加える） */
   private stepMagnets(): void {
     if (this.magnets.length === 0) return;
@@ -661,6 +710,7 @@ export class Simulation {
       let ay = 0;
       let az = 0;
       for (const m of this.magnets) {
+        if (!this.signalOn(m.id)) continue;
         const a = magnetAccel(m, [t.x, t.y, t.z]);
         if (!a) continue;
         ax += a[0];

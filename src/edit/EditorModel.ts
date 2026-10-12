@@ -1,6 +1,7 @@
 import { getDeviceDef } from '../sim/catalog';
 import type { DeviceType, PlacedDevice, SliceLayout } from '../sim/layout';
 import { findSpec, formatParam, normalizeParam, paramValue } from './params';
+import { acceptsSignal } from '../sim/switch';
 import {
   PLACEMENT,
   PROBLEM_TEXT,
@@ -35,6 +36,8 @@ export class EditorModel {
   /** ステージで置ける装置と数（null＝自由研究：制限なし） */
   private _inventory: Partial<Record<DeviceType, number>> | null = null;
   private _message: EditMessage | null = null;
+  /** 配線中のスイッチ（次にタップした装置とつなぐ／外す） */
+  private _wiringFrom: string | null = null;
   private past: PlacedDevice[][] = [];
   private future: PlacedDevice[][] = [];
   private listeners = new Set<(kind: ChangeKind) => void>();
@@ -107,6 +110,7 @@ export class EditorModel {
   }
 
   private reset(devices: readonly PlacedDevice[], text: string): void {
+    this._wiringFrom = null;
     this._devices = clone(devices);
     this.past = [];
     this.future = [];
@@ -137,7 +141,58 @@ export class EditorModel {
     return () => this.listeners.delete(fn);
   }
 
+  get wiringFrom(): string | null {
+    return this._wiringFrom;
+  }
+
+  /** 配線を始める：次にタップした発射機・磁石とつなぐ（つながっていれば外す） */
+  startWiring(switchId: string): boolean {
+    const d = this.find(switchId);
+    if (!d || d.type !== 'switch' || this.guardLocked(switchId)) return false;
+    this._wiringFrom = switchId;
+    this._message = { kind: 'info', text: `${switchId} の配線：つなぐ（外す）発射機か磁石をタップしてください` };
+    this.emit('selection');
+    this.emit('message');
+    return true;
+  }
+
+  cancelWiring(): void {
+    if (!this._wiringFrom) return;
+    this._wiringFrom = null;
+    this._message = { kind: 'info', text: '配線をやめました' };
+    this.emit('selection');
+    this.emit('message');
+  }
+
+  /** スイッチと装置の配線をつなぐ／外す（元に戻せる） */
+  toggleWire(switchId: string, targetId: string): boolean {
+    const s = this.find(switchId);
+    const t = this.find(targetId);
+    if (!s || s.type !== 'switch' || !t || this.guardLocked(switchId)) return false;
+    if (!acceptsSignal(t.type)) {
+      this.fail('スイッチの信号を受けられるのは発射機と磁石です');
+      return false;
+    }
+    const targets = s.signalTargets ?? [];
+    const linked = targets.includes(targetId);
+    const next = { ...s, signalTargets: linked ? targets.filter((x) => x !== targetId) : [...targets, targetId] };
+    this.commit(this.replace(next), linked ? `${switchId} と ${targetId} の配線を外しました` : `${switchId} を ${targetId} に配線しました`);
+    return true;
+  }
+
   select(id: string | null): void {
+    // 配線中：タップした装置とつなぐ（何もない所・同じスイッチならやめる）
+    if (this._wiringFrom) {
+      const from = this._wiringFrom;
+      this._wiringFrom = null;
+      if (id && id !== from && this.find(id)) this.toggleWire(from, id);
+      else {
+        this._message = { kind: 'info', text: '配線をやめました' };
+        this.emit('message');
+      }
+      this.emit('selection');
+      return;
+    }
     if (id !== null && !this._devices.some((d) => d.id === id)) id = null;
     if (id === this._selectedId) return;
     this._selectedId = id;
@@ -223,8 +278,11 @@ export class EditorModel {
 
   remove(id: string): boolean {
     if (!this.find(id) || this.guardLocked(id)) return false;
+    // 消した装置への配線も外す
     this.commit(
-      this._devices.filter((d) => d.id !== id),
+      this._devices
+        .filter((d) => d.id !== id)
+        .map((d) => (d.signalTargets?.includes(id) ? { ...d, signalTargets: d.signalTargets.filter((x) => x !== id) } : d)),
       `${id} を削除しました`,
     );
     if (this._selectedId === id) this.select(null);
@@ -329,7 +387,11 @@ export class EditorModel {
 }
 
 function clone(devices: readonly PlacedDevice[]): PlacedDevice[] {
-  return devices.map((d) => ({ ...d, position: [...d.position] as PlacedDevice['position'], params: d.params ? { ...d.params } : undefined }));
+  return devices.map((d) => {
+    const c: PlacedDevice = { ...d, position: [...d.position] as PlacedDevice['position'], params: d.params ? { ...d.params } : undefined };
+    if (d.signalTargets) c.signalTargets = [...d.signalTargets];
+    return c;
+  });
 }
 
 function samePlacement(a: PlacedDevice, b: PlacedDevice): boolean {

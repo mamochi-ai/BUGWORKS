@@ -67,6 +67,7 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
     },
   ],
   shaft: [{ key: 'lengthMeters', label: '長さ', unit: 'm', min: 0.5, max: 3, step: 0.5 }],
+  switch: [],
   magnet: [
     {
       key: 'mode',

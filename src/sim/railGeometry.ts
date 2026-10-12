@@ -81,9 +81,9 @@ function railInY(device: PlacedDevice): number {
   return out + slope;
 }
 
-/** ball_in → ball_out をまっすぐ結ぶ走行路（レール・羽根車・可動橋〔下りた状態〕） */
+/** ball_in → ball_out をまっすぐ結ぶ走行路（レール・羽根車・スイッチ・可動橋〔下りた状態〕） */
 export function buildRailTrack(device: PlacedDevice): RailTrack {
-  if (device.type !== 'rail' && device.type !== 'paddle' && device.type !== 'bridge') throw new Error(`直線の走行路ではありません: ${device.id}`);
+  if (device.type !== 'rail' && device.type !== 'paddle' && device.type !== 'bridge' && device.type !== 'switch') throw new Error(`直線の走行路ではありません: ${device.id}`);
   const start = portWorldPosition(device, 'ball_in');
   const end = portWorldPosition(device, 'ball_out');
   const d: Vec3 = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];

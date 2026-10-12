@@ -1,10 +1,10 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
-import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
+import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
 /** パレットに並べる装置 */
-const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge', 'magnet'];
+const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge', 'magnet', 'switch'];
 /** パレットのボタンに出す短い名前（正式名はボタンの title に出す） */
 const PALETTE_LABELS: Record<DeviceType, string> = {
   rail: 'レール',
@@ -18,6 +18,7 @@ const PALETTE_LABELS: Record<DeviceType, string> = {
   shaft: '軸',
   bridge: '可動橋',
   magnet: '磁石',
+  switch: 'スイッチ',
 };
 import { PARAM_SPECS, formatParam, paramValue, stepParam } from '../edit/params';
 import { planLauncher } from '../sim/launcher';
@@ -59,6 +60,11 @@ export class EditPanel {
         <button type="button" data-e="down" aria-label="高さを下げる"><i>▼</i><span>下げる</span></button>
       </div>
       <section class="params" data-k="params" aria-label="選択中の装置の設定" hidden></section>
+      <section class="params wires" data-k="wires" aria-label="スイッチの配線" hidden>
+        <h3>配線</h3>
+        <p class="wire-list" data-k="wireList"></p>
+        <button type="button" data-e="wire" aria-label="配線"><i>⚡</i><span data-k="wireLabel">配線する</span></button>
+      </section>
       <div class="row">
         <button type="button" data-e="undo" aria-label="元に戻す"><i>↶</i><span>戻す</span></button>
         <button type="button" data-e="redo" aria-label="やり直す"><i>↷</i><span>やり直し</span></button>
@@ -70,6 +76,7 @@ export class EditPanel {
           <button type="button" data-e="sample-spring">バネでゴール</button>
           <button type="button" data-e="sample-gear">歯車で可動橋</button>
           <button type="button" data-e="sample-magnet">磁石でゴール</button>
+          <button type="button" data-e="sample-switch">スイッチで発射</button>
         </div>
       </div>
     `;
@@ -113,7 +120,7 @@ export class EditPanel {
   private run(action: string): void {
     const { editor, ctl } = this.deps;
     const id = editor.selectedId;
-    const needsSel = ['rotate', 'delete', 'up', 'down'].includes(action);
+    const needsSel = ['rotate', 'delete', 'up', 'down', 'wire'].includes(action);
     if (needsSel && !id) return;
     ctl.ensureEditable();
     switch (action) {
@@ -127,7 +134,8 @@ export class EditPanel {
       case 'add-gearbox':
       case 'add-shaft':
       case 'add-bridge':
-      case 'add-magnet': {
+      case 'add-magnet':
+      case 'add-switch': {
         const p = this.deps.addPosition();
         editor.addDevice(action.slice(4) as DeviceType, p.x, p.z);
         break;
@@ -135,6 +143,10 @@ export class EditPanel {
 
       case 'rotate':
         editor.rotate(id!);
+        break;
+      case 'wire':
+        if (editor.wiringFrom) editor.cancelWiring();
+        else editor.startWiring(id!);
         break;
       case 'delete':
         editor.remove(id!);
@@ -154,6 +166,9 @@ export class EditPanel {
       case 'sample-magnet':
         editor.loadLayout(MAGNET_SAMPLE_LAYOUT.devices, 'サンプル「磁石でゴール」を読み込みました。床を転がる球を磁石が引きよせます');
         break;
+      case 'sample-switch':
+        editor.loadLayout(SWITCH_SAMPLE_LAYOUT.devices, 'サンプル「スイッチで発射」を読み込みました。左の球がスイッチを通るたびに、右の発射機が ON/OFF します');
+        break;
       case 'undo':
         editor.undo();
         break;
@@ -161,6 +176,23 @@ export class EditPanel {
         editor.redo();
         break;
     }
+  }
+
+  /** スイッチの配線先（文字で一覧）と、配線ボタン */
+  private renderWires(): void {
+    const { editor } = this.deps;
+    const sel = editor.selected;
+    const box = this.el.wires;
+    box.hidden = sel?.type !== 'switch';
+    if (!sel || sel.type !== 'switch') return;
+    const targets = (sel.signalTargets ?? []).map((id) => editor.devices.find((d) => d.id === id)).filter((d) => d !== undefined);
+    this.el.wireList.textContent = targets.length
+      ? targets.map((d) => `→ ${getDeviceDef(d.type).name} ${d.id}`).join('\n')
+      : 'まだどこにもつないでいません';
+    const wiring = editor.wiringFrom === sel.id;
+    this.el.wireLabel.textContent = wiring ? '配線をやめる' : '配線する';
+    (this.el.wire as HTMLButtonElement).disabled = editor.isLocked(sel.id);
+    (this.el.wire as HTMLButtonElement).setAttribute('aria-pressed', String(wiring));
   }
 
   /** 選択中の装置の設定（−／値／＋）。値はテキストで表示し、色に頼らない */
@@ -219,6 +251,7 @@ export class EditPanel {
     // 台の上（または床）に乗る装置は高さを手で変えない
     if (sel && restsOnSurface(sel.type)) for (const k of ['up', 'down']) (this.el[k] as HTMLButtonElement).disabled = true;
     this.renderParams();
+    this.renderWires();
     (this.el.undo as HTMLButtonElement).disabled = !editor.canUndo;
     (this.el.redo as HTMLButtonElement).disabled = !editor.canRedo;
     const m = editor.message;
