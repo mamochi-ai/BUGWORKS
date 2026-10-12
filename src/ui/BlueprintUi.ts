@@ -1,5 +1,6 @@
 import { blueprintToJson, fileNameFor, parseBlueprint, toBlueprint } from '../blueprint/blueprint';
 import { listSaved, removeSaved, saveBlueprint } from '../blueprint/store';
+import { mergeLayouts } from '../blueprint/merge';
 import type { EditorModel } from '../edit/EditorModel';
 import type { SimulationController } from '../sim/SimulationController';
 import type { StageController } from '../stage/StageController';
@@ -10,6 +11,8 @@ import type { StageController } from '../stage/StageController';
  */
 export class BlueprintUi {
   private el: Record<string, HTMLElement> = {};
+  /** ファイルを選んだあと、置き換えるか（open）つなげるか（merge） */
+  private fileMode: 'open' | 'merge' = 'open';
 
   constructor(
     root: HTMLElement,
@@ -42,11 +45,13 @@ export class BlueprintUi {
           </div>
         </section>
         <section class="bp-sec" aria-label="開く">
-          <h3>開く</h3>
+          <h3>開く・つなげる</h3>
+          <p class="bp-note">「開く」はいまの配置と入れ替えます。「つなげる」はいまの配置に足します（重ならない所に置き、ID を付け直します）。</p>
           <p class="bp-note" data-k="openNote"></p>
           <ul class="bp-list" data-k="list"></ul>
           <div class="stage-actions">
             <button type="button" data-b="load-file" data-k="loadFile"><i>⇧</i><span>ファイルから読み込む</span></button>
+            <button type="button" data-b="merge-file" data-k="mergeFile"><i>⊕</i><span>ファイルからつなげる</span></button>
           </div>
           <input type="file" accept=".json,application/json" data-k="file" hidden />
         </section>
@@ -111,6 +116,16 @@ export class BlueprintUi {
         if (item) this.load(item.json);
         break;
       }
+      case 'merge': {
+        const item = listSaved().find((x) => x.id === id);
+        if (item) this.merge(item.json);
+        break;
+      }
+      case 'merge-file':
+        this.fileMode = 'merge';
+        (this.el.file as HTMLInputElement).value = '';
+        (this.el.file as HTMLInputElement).click();
+        break;
       case 'delete':
         // 消すと戻せないので確かめる
         if (id && window.confirm('この設計図を消しますか？（元に戻せません）')) {
@@ -120,6 +135,7 @@ export class BlueprintUi {
         }
         break;
       case 'load-file':
+        this.fileMode = 'open';
         (this.el.file as HTMLInputElement).value = '';
         (this.el.file as HTMLInputElement).click();
         break;
@@ -137,7 +153,7 @@ export class BlueprintUi {
     if (!f) return;
     if (f.size > 400_000) return this.say('ファイルが大きすぎます', 'error');
     f.text()
-      .then((t) => this.load(t))
+      .then((t) => (this.fileMode === 'merge' ? this.merge(t) : this.load(t)))
       .catch(() => this.say('ファイルを読めませんでした', 'error'));
   }
 
@@ -152,10 +168,26 @@ export class BlueprintUi {
     this.el.modal.hidden = true;
   }
 
+  /** 設計図をいまの配置につなげる（元に戻せる）。ステージ中はできない */
+  private merge(json: string): void {
+    if (this.editor.inStage) return this.say('ステージ中はつなげられません（ステージ選択の「自由研究」でできます）', 'error');
+    const r = parseBlueprint(json);
+    if (!r.ok) return this.say(`読み込めません：${r.errors.slice(0, 3).join('／')}`, 'error');
+    const m = mergeLayouts(this.editor.devices, r.devices, this.editor.seed);
+    if (!m.ok) return this.say(`つなげられません：${m.errors.slice(0, 2).join('／')}`, 'error');
+    this.ctl.ensureEditable();
+    const shift = m.offset[0] === 0 && m.offset[1] === 0 ? 'そのままの位置' : `横に ${m.offset[0]}m・前後に ${m.offset[1]}m ずらした位置`;
+    const text = `設計図「${r.title}」の装置 ${m.added} 個を${shift}に足しました（ID は ${m.namespace}_ 付き）。新しくつながった所：${m.joined} か所`;
+    this.editor.loadLayout(m.devices, text);
+    this.say(text + (m.warnings.length ? `（注意：${m.warnings[0]}）` : ''), 'info');
+    this.el.modal.hidden = true;
+  }
+
   private renderList(): void {
     const inStage = this.editor.inStage;
     this.el.openNote.textContent = inStage ? 'ステージ中は開けません（ステージ選択の「自由研究」で開けます）' : '';
     (this.el.loadFile as HTMLButtonElement).disabled = inStage;
+    (this.el.mergeFile as HTMLButtonElement).disabled = inStage;
     const list = this.el.list;
     list.replaceChildren();
     const saved = listSaved();
@@ -181,13 +213,20 @@ export class BlueprintUi {
       openB.disabled = inStage;
       openB.textContent = '開く';
       openB.setAttribute('aria-label', `「${s.title}」を開く`);
+      const mergeB = document.createElement('button');
+      mergeB.type = 'button';
+      mergeB.dataset.b = 'merge';
+      mergeB.dataset.id = s.id;
+      mergeB.disabled = inStage;
+      mergeB.textContent = 'つなげる';
+      mergeB.setAttribute('aria-label', `「${s.title}」をいまの配置につなげる`);
       const del = document.createElement('button');
       del.type = 'button';
       del.dataset.b = 'delete';
       del.dataset.id = s.id;
       del.textContent = '消す';
       del.setAttribute('aria-label', `「${s.title}」を消す`);
-      li.append(name, openB, del);
+      li.append(name, openB, mergeB, del);
       list.appendChild(li);
     }
   }
