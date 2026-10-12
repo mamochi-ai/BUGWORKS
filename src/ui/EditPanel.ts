@@ -1,6 +1,6 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
-import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
+import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, RAIL_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
 /** パレットに並べる装置 */
@@ -77,6 +77,7 @@ export class EditPanel {
           <button type="button" data-e="sample-gear">歯車で可動橋</button>
           <button type="button" data-e="sample-magnet">磁石でゴール</button>
           <button type="button" data-e="sample-switch">スイッチで発射</button>
+          <button type="button" data-e="sample-rails">いろいろなレール</button>
         </div>
       </div>
     `;
@@ -168,6 +169,9 @@ export class EditPanel {
         break;
       case 'sample-switch':
         editor.loadLayout(SWITCH_SAMPLE_LAYOUT.devices, 'サンプル「スイッチで発射」を読み込みました。左の球がスイッチを通るたびに、右の発射機が ON/OFF します');
+        break;
+      case 'sample-rails':
+        editor.loadLayout(RAIL_SAMPLE_LAYOUT.devices, 'サンプル「いろいろなレール」を読み込みました。長さ・坂・急なカーブ・45°カーブを使っています');
         break;
       case 'undo':
         editor.undo();

@@ -1,5 +1,5 @@
 import { getDeviceDef, getPort, type PortDef, type Vec3 } from './catalog';
-import { curvePorts, curveTurn } from './curveGeometry';
+import { curveShape, shapePorts } from './curveGeometry';
 import { SHAFT_Y, isFloorShaftPort, shaftPortZ } from './drive';
 import type { PlacedDevice } from './layout';
 
@@ -48,11 +48,13 @@ export function scale(a: Vec3, k: number): Vec3 {
 /** 装置のポート（装置ローカル）。カーブは曲がる向きで左右が変わる */
 export function localPort(device: PlacedDevice, portId: string): PortDef {
   if (device.type === 'curve') {
-    const p = curvePorts(curveTurn(device)).find((x) => x.id === portId);
+    const p = shapePorts(curveShape(device)).find((x) => x.id === portId);
     if (!p) throw new Error(`装置 ${device.id} にポート ${portId} がありません`);
     return p;
   }
   const port = getPort(getDeviceDef(device.type), portId);
+  // 長さが変わる直線レール（入口・出口は長さの半分の位置）
+  if (device.type === 'rail') return { ...port, position: [port.position[0], port.position[1], Math.sign(port.position[2]) * (railLength(device) / 2)] };
   // 長さが変わる軸
   if (device.type === 'shaft') return { ...port, position: [0, port.position[1], shaftPortZ(device, portId)] };
   // 羽根車・可動橋の軸は、装置の高さによらず床から一定の高さ
@@ -70,15 +72,22 @@ export function portWorldPosition(device: PlacedDevice, portId: string): Vec3 {
   return add(device.position, rotateY(local, (device.rotationYDeg * Math.PI) / 180));
 }
 
+/** 直線レールの長さ（設定 lengthMeters。既定は JSON の外形の 2m, DECISIONS.md D-31） */
+export function railLength(device: PlacedDevice): number {
+  return device.params?.lengthMeters ?? getDeviceDef('rail').size[2];
+}
+
 /**
  * slopeMeters パラメータは入口と出口の高低差として解釈する（DECISIONS.md D-07）。
  * 既定値 0.2 は JSON のポート高さ差（0.35-0.15）と一致する。
  */
 function railInY(device: PlacedDevice): number {
-  const def = getDeviceDef('rail');
-  const out = getPort(def, 'ball_out').position[1];
-  const slope = device.params?.slopeMeters ?? Number(def.params.slopeMeters);
-  return out + slope;
+  return getPort(getDeviceDef('rail'), 'ball_out').position[1] + railSlope(device);
+}
+
+/** 直線レールの入口と出口の高低差（設定 slopeMeters） */
+export function railSlope(device: PlacedDevice): number {
+  return device.params?.slopeMeters ?? Number(getDeviceDef('rail').params.slopeMeters);
 }
 
 /** ball_in → ball_out をまっすぐ結ぶ走行路（レール・羽根車・スイッチ・可動橋〔下りた状態〕） */

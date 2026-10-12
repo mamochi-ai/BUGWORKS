@@ -2,7 +2,8 @@ import { getDeviceDef, type Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { platformTop, platformHeight } from '../sim/goal';
 import { shaftLength } from '../sim/drive';
-import { localPort, portWorldPosition, rotateY } from '../sim/railGeometry';
+import { localPort, portWorldPosition, railLength, rotateY } from '../sim/railGeometry';
+import { curveShape, shapeBounds } from '../sim/curveGeometry';
 
 /**
  * 置いた面の上に乗る装置（DECISIONS.md D-23）。高さは手で変えず、真下の台の上面（無ければ床）に合わせる。
@@ -101,11 +102,26 @@ export function snapToGrid(v: number): number {
 export function footprint(device: PlacedDevice): { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number } {
   const [sx, defY, defZ] = getDeviceDef(device.type).size;
   const sy = device.type === 'platform' ? platformHeight(device) : defY;
-  const sz = device.type === 'shaft' ? shaftLength(device) : defZ;
-  const quarter = (((Math.round(device.rotationYDeg / 90) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
-  const [hx, hz] = quarter % 2 === 0 ? [sx / 2, sz / 2] : [sz / 2, sx / 2];
+  const sz = device.type === 'shaft' ? shaftLength(device) : device.type === 'rail' ? railLength(device) : defZ;
+  // 装置ローカルの外形（カーブは形に合わせる。45°は原点に対して片寄る）
+  const local = device.type === 'curve' ? shapeBounds(curveShape(device)) : { minX: -sx / 2, maxX: sx / 2, minZ: -sz / 2, maxZ: sz / 2 };
+  const yaw = (Math.round(device.rotationYDeg / 90) * Math.PI) / 2;
   const [x, y, z] = device.position;
-  return { minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz, minY: y, maxY: y + sy };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const cx of [local.minX, local.maxX]) {
+    for (const cz of [local.minZ, local.maxZ]) {
+      const [wx, , wz] = rotateY([cx, 0, cz], yaw);
+      minX = Math.min(minX, x + wx);
+      maxX = Math.max(maxX, x + wx);
+      minZ = Math.min(minZ, z + wz);
+      maxZ = Math.max(maxZ, z + wz);
+    }
+  }
+  const r = (v: number) => Math.round(v * 1e9) / 1e9;
+  return { minX: r(minX), maxX: r(maxX), minZ: r(minZ), maxZ: r(maxZ), minY: y, maxY: y + sy };
 }
 
 export function overlaps(a: PlacedDevice, b: PlacedDevice): boolean {
@@ -238,7 +254,9 @@ export function evaluateMove(moving: PlacedDevice, desiredX: number, desiredZ: n
       const local = portWorldPosition({ ...moving, position: [0, 0, 0] }, mine);
       // 軸は床から一定の高さを通すので、軸どうしの吸着では高さを変えない（面に乗る装置は面に合わせる）
       const y = type === 'shaft' ? moving.position[1] : target[1] - local[1];
-      const pos: Vec3 = [target[0] - local[0], y, target[2] - local[2]];
+      // 斜めのポート（45°カーブ）でも位置の誤差がたまらないよう細かく丸める
+      const r9 = (v: number) => Math.round(v * 1e9) / 1e9;
+      const pos: Vec3 = [r9(target[0] - local[0]), r9(y), r9(target[2] - local[2])];
       const dist = Math.hypot(pos[0] - desiredX, pos[2] - desiredZ);
       if (dist > PLACEMENT.snapRadius) continue;
       const placed: PlacedDevice = seatOnSurface({ ...moving, position: pos }, others);

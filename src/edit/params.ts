@@ -2,7 +2,8 @@ import type { DeviceType, PlacedDevice } from '../sim/layout';
 import { launcherParams } from '../sim/launcher';
 import { springParams } from '../sim/spring';
 import { platformHeight } from '../sim/goal';
-import { curveTurn } from '../sim/curveGeometry';
+import { curveShape } from '../sim/curveGeometry';
+import { railLength, railSlope } from '../sim/railGeometry';
 import { gearRatio, shaftLength } from '../sim/drive';
 import { magnetParams } from '../sim/magnet';
 
@@ -22,7 +23,22 @@ export interface ParamSpec {
 }
 
 export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
-  rail: [],
+  rail: [
+    { key: 'slopeMeters', label: '下る高さ（坂のきつさ）', unit: 'm', min: 0, max: 0.6, step: 0.1 },
+    {
+      key: 'lengthMeters',
+      label: '長さ',
+      unit: 'm',
+      min: 1,
+      max: 3,
+      step: 1,
+      choices: [
+        { value: 1, label: '1m' },
+        { value: 2, label: '2m' },
+        { value: 3, label: '3m' },
+      ],
+    },
+  ],
   launcher: [
     { key: 'launchSpeed', label: '速さ', unit: 'm/s', min: 2, max: 8, step: 0.5 },
     { key: 'angleDegrees', label: '角度', unit: '°', min: 0, max: 60, step: 15 },
@@ -44,6 +60,31 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
       choices: [
         { value: -1, label: '右' },
         { value: 1, label: '左' },
+      ],
+    },
+    {
+      key: 'radius',
+      label: '曲がり方',
+      unit: 'm',
+      min: 0.75,
+      max: 1.25,
+      step: 0.5,
+      choices: [
+        { value: 1.25, label: 'ゆるい（半径1.25m）' },
+        { value: 0.75, label: '急（半径0.75m）' },
+      ],
+    },
+    {
+      key: 'arc',
+      label: '角度',
+      unit: '',
+      min: 0,
+      max: 2,
+      step: 1,
+      choices: [
+        { value: 0, label: '90°' },
+        { value: 1, label: '45° 曲がり始め' },
+        { value: 2, label: '45° 曲がり終わり' },
       ],
     },
   ],
@@ -104,14 +145,16 @@ export function normalizeParam(spec: ParamSpec, value: number): number {
 /** 今の値（未設定なら JSON または既定値） */
 export function paramValue(device: PlacedDevice, key: string): number {
   const all: Record<string, number> =
-    device.type === 'launcher'
+    device.type === 'rail'
+      ? { slopeMeters: railSlope(device), lengthMeters: railLength(device) }
+      : device.type === 'launcher'
       ? { ...launcherParams(device) }
       : device.type === 'spring'
         ? { ...springParams(device) }
         : device.type === 'platform'
           ? { heightMeters: platformHeight(device) }
           : device.type === 'curve'
-            ? { turn: curveTurn(device) }
+            ? { turn: curveShape(device).turn, radius: curveShape(device).radius, arc: curveShape(device).arc }
             : device.type === 'gearbox'
               ? { gearRatio: gearRatio(device) }
               : device.type === 'shaft'
