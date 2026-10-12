@@ -12,6 +12,7 @@ import { Hud } from './ui/Hud';
 import { StageController } from './stage/StageController';
 import { StageUi } from './ui/StageUi';
 import { BlueprintUi } from './ui/BlueprintUi';
+import { BugUi } from './ui/BugUi';
 
 async function boot(): Promise<void> {
   const viewport = document.getElementById('viewport')!;
@@ -29,6 +30,16 @@ async function boot(): Promise<void> {
   const stage = new StageController(editor, ctl, sim, VERTICAL_SLICE_LAYOUT);
   new StageUi(hudRoot, stage, ctl);
   new BlueprintUi(hudRoot, editor, ctl, stage);
+  const bugUi = new BugUi(hudRoot);
+  // この再生で発動したバグのうち、まだ画面に出していないもの（同じバグは1回の再生で1回だけ知らせる）
+  let bugSeen = 0;
+  const bugShown = new Set<string>();
+  ctl.onChange(() => {
+    if (ctl.state === 'ready') {
+      bugSeen = 0;
+      bugShown.clear();
+    }
+  });
   stage.onChange((c) => {
     if (c !== 'stage') return;
     hud.goalBanner = stage.current === null;
@@ -93,6 +104,17 @@ async function boot(): Promise<void> {
     else alpha = 1;
 
     stage.update();
+    const bugs = sim.bugEvents();
+    // 配置の差し替えなどで記録が消えたら、数え直す
+    if (bugs.length < bugSeen) {
+      bugSeen = 0;
+      bugShown.clear();
+    }
+    for (; bugSeen < bugs.length; bugSeen++) {
+      if (bugShown.has(bugs[bugSeen].id)) continue;
+      bugShown.add(bugs[bugSeen].id);
+      bugUi.handle(bugs[bugSeen]);
+    }
     rig.update(Math.min(realDt, 0.1));
     view.render(rig.camera, alpha);
 
