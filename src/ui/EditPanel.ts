@@ -1,10 +1,10 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
-import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, RAIL_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
+import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, RAIL_SAMPLE_LAYOUT, ROTATOR_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
 /** パレットに並べる装置 */
-const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge', 'magnet', 'switch'];
+const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge', 'magnet', 'switch', 'rotator'];
 /** パレットのボタンに出す短い名前（正式名はボタンの title に出す） */
 const PALETTE_LABELS: Record<DeviceType, string> = {
   rail: 'レール',
@@ -19,6 +19,7 @@ const PALETTE_LABELS: Record<DeviceType, string> = {
   bridge: '可動橋',
   magnet: '磁石',
   switch: 'スイッチ',
+  rotator: '回転台',
 };
 import { PARAM_SPECS, formatParam, paramValue, stepParam } from '../edit/params';
 import { planLauncher } from '../sim/launcher';
@@ -78,6 +79,7 @@ export class EditPanel {
           <button type="button" data-e="sample-magnet">磁石でゴール</button>
           <button type="button" data-e="sample-switch">スイッチで発射</button>
           <button type="button" data-e="sample-rails">いろいろなレール</button>
+          <button type="button" data-e="sample-rotator">回転台で分ける</button>
         </div>
       </div>
     `;
@@ -136,7 +138,8 @@ export class EditPanel {
       case 'add-shaft':
       case 'add-bridge':
       case 'add-magnet':
-      case 'add-switch': {
+      case 'add-switch':
+      case 'add-rotator': {
         const p = this.deps.addPosition();
         editor.addDevice(action.slice(4) as DeviceType, p.x, p.z);
         break;
@@ -172,6 +175,9 @@ export class EditPanel {
         break;
       case 'sample-rails':
         editor.loadLayout(RAIL_SAMPLE_LAYOUT.devices, 'サンプル「いろいろなレール」を読み込みました。長さ・坂・急なカーブ・45°カーブを使っています');
+        break;
+      case 'sample-rotator':
+        editor.loadLayout(ROTATOR_SAMPLE_LAYOUT.devices, 'サンプル「回転台で分ける」を読み込みました。スイッチが ON の間は左へ、OFF の間はまっすぐ出します');
         break;
       case 'undo':
         editor.undo();

@@ -159,7 +159,8 @@ export function ballPortRole(portId: string): 'in' | 'out' | null {
 /** 接続の対象になるポート（ball・shaft の入口/出口）。signal はまだ扱わない */
 export function rolePorts(device: PlacedDevice): { portId: string; role: 'in' | 'out'; type: 'ball' | 'shaft' }[] {
   return getDeviceDef(device.type)
-    .ports.filter((p) => p.type === 'ball' || p.type === 'shaft')
+    // 回転装置の軸の入口は今回は使わない（D-32）
+    .ports.filter((p) => (p.type === 'ball' || p.type === 'shaft') && !(device.type === 'rotator' && p.type === 'shaft'))
     .flatMap((p) => {
       const role = ballPortRole(p.id);
       return role ? [{ portId: p.id, role, type: p.type as 'ball' | 'shaft' }] : [];

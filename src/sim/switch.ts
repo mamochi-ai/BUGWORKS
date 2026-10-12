@@ -7,17 +7,18 @@ import { inPaddleZone } from './drive';
  * - 配線（PlacedDevice.signalTargets）した発射機・磁石へ信号を送る。信号は「ON の間だけ」効く
  *   - 発射機：配線されていると ON の間だけいつもの間隔で撃つ（配線が無ければ今までどおり）
  *   - 磁石：配線されていると ON の間だけ力が掛かる
+ *   - 回転装置：配線されていると ON の間だけ台が回る
  * - 1台に複数のスイッチを配線したら、どれか1つでも ON なら ON
  */
 
 /** スイッチの信号を受けられる装置 */
 export function acceptsSignal(type: DeviceType): boolean {
-  return type === 'launcher' || type === 'magnet';
+  return type === 'launcher' || type === 'magnet' || type === 'rotator';
 }
 
 /** 信号を受け取るポート（配線の線の端） */
 export function signalInPort(type: DeviceType): string | null {
-  return type === 'launcher' ? 'trigger' : type === 'magnet' ? 'enable' : null;
+  return type === 'launcher' ? 'trigger' : type === 'magnet' || type === 'rotator' ? 'enable' : null;
 }
 
 /** スイッチの範囲（羽根車と同じ：レールの中央付近の、走行面の上） */

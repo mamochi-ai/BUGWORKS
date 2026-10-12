@@ -10,6 +10,7 @@ import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, 
 import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel } from './magnet';
 import { inSwitchZone, signalSources } from './switch';
+import { ROTATOR, alignedWithEntry, atRotatorEntry, exitFor, rotatorParams, rotatorToLocal, rotatorToWorld, travelDir } from './rotator';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -91,6 +92,18 @@ export interface SwitchState {
   toggles: number;
 }
 
+export interface RotatorState {
+  deviceId: string;
+  /** 台の角度（rad、上から見て反時計回りが +） */
+  angle: number;
+  /** 入口で待っている球（先頭から） */
+  queue: number[];
+  /** 台に乗っている球 */
+  riding: { ballId: number; phase: 'slide' | 'ride'; t: number; turned: number } | null;
+  /** 送り出した回数 */
+  releases: number;
+}
+
 export interface SimSnapshot {
   tick: number;
   paddles: PaddleState[];
@@ -100,6 +113,7 @@ export interface SimSnapshot {
   balls: BallSnapshot[];
   launchers: LauncherState[];
   switches: SwitchState[];
+  rotators: RotatorState[];
   /** 場外に落ちて取り除いた球の数 */
   lostBalls: number;
 }
@@ -130,6 +144,17 @@ const MATERIAL = {
  * 1回の step() が厳密に 1 tick = PHYSICS_DT 秒。
  * リセットは「ワールドを破棄して同じレイアウトから作り直す」ことで初期状態を完全再現する。
  */
+/**
+ * 回転装置の台を「まっすぐの向き（π の倍数）」で止めるための、このtickの回転量。
+ * すでにまっすぐなら 0。次のまっすぐの向きを越えるなら、ちょうどそこまで。
+ */
+export function parkStep(angle: number, dA: number): number {
+  const k = angle / Math.PI;
+  if (Math.abs(k - Math.round(k)) < 1e-9) return 0;
+  const next = (dA > 0 ? Math.ceil(k) : Math.floor(k)) * Math.PI;
+  return Math.abs(next - angle) <= Math.abs(dA) ? next - angle : dA;
+}
+
 export class Simulation {
   private _tracks: RailTrack[] = [];
   readonly labBoxes: LabBox[];
@@ -142,6 +167,7 @@ export class Simulation {
   private bridges: (BridgeState & { device: PlacedDevice; deck: RigidBody; hinge: Vec3; deckCenter: Vec3; deckPitch: number; yaw: number })[] = [];
   private shaftLinks: ShaftLink[] = [];
   private magnets: PlacedDevice[] = [];
+  private rotators: (RotatorState & { device: PlacedDevice })[] = [];
   private switches: (SwitchState & { device: PlacedDevice; inside: Set<number> })[] = [];
   /** 信号を受ける装置ID → 配線されたスイッチID */
   private signalFrom = new Map<string, string[]>();
@@ -230,6 +256,7 @@ export class Simulation {
     for (const sp of this.springs) this.stepSpring(sp);
     this.stepDrive();
     this.stepMagnets();
+    this.stepRotators();
     this.world.step();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
@@ -275,6 +302,10 @@ export class Simulation {
         sp.heldBallId = null;
         sp.heldAt = null;
       }
+    }
+    for (const r of this.rotators) {
+      r.queue = r.queue.filter((id) => id !== b.id);
+      if (r.riding?.ballId === b.id) r.riding = null;
     }
     this.world.removeRigidBody(b.body);
     this.balls.splice(index, 1);
@@ -451,6 +482,7 @@ export class Simulation {
         heldAt: sp.heldAt ? [sp.heldAt[0], sp.heldAt[1], sp.heldAt[2]] : null,
         launches: sp.launches,
       })),
+      rotators: this.rotators.map((r) => ({ deviceId: r.deviceId, angle: r.angle, queue: [...r.queue], riding: r.riding ? { ...r.riding } : null, releases: r.releases })),
       switches: this.switches.map((s) => ({ deviceId: s.deviceId, on: s.on, toggles: s.toggles })),
       balls: this.readBalls(),
       launchers: this.launchers.map((l) => ({
@@ -538,6 +570,9 @@ export class Simulation {
       .filter((d) => d.type === 'switch')
       .map((d) => ({ deviceId: d.id, device: d, on: false, toggles: 0, inside: new Set<number>() }));
     this.signalFrom = signalSources(this._layout.devices);
+    this.rotators = this._layout.devices
+      .filter((d) => d.type === 'rotator')
+      .map((d) => ({ deviceId: d.id, device: d, angle: 0, queue: [], riding: null, releases: 0 }));
     this.bridges = [];
     this.shaftLinks = findConnections(this._layout.devices)
       .filter((c) => c.type === 'shaft')
@@ -562,6 +597,7 @@ export class Simulation {
       if (d.type === 'paddle') this.paddles.push({ deviceId: d.id, device: d, angle: 0, target: 0, passes: 0, inside: new Set() });
       if (d.type === 'bridge') this.addBridge(d);
       if (d.type === 'gearbox' || d.type === 'shaft' || d.type === 'magnet') this.addDriveBox(d);
+      if (d.type === 'rotator') this.addRotatorDeck(d);
     }
 
     for (const d of this._layout.devices) {
@@ -699,6 +735,93 @@ export class Simulation {
   /** 描画用：スイッチの ON/OFF */
   switchStates(): Map<string, boolean> {
     return new Map(this.switches.map((s) => [s.deviceId, s.on]));
+  }
+
+  /**
+   * 回転装置（D-32）：入口に来た球を待たせ、台のレールがそろったら中央へ運んで台と一緒に回し、
+   * 球の進む向きが入口以外の辺を向いたら送り出す。球は位置を直接動かす（決定論のため順序は固定）。
+   */
+  private stepRotators(): void {
+    if (this.rotators.length === 0) return;
+    const dt = PHYSICS_DT;
+    // 他の装置がつかんでいる球は対象にしない
+    const busy = new Set<number>();
+    for (const l of this.launchers) if (l.loadedBallId !== null) busy.add(l.loadedBallId);
+    for (const sp of this.springs) if (sp.heldBallId !== null) busy.add(sp.heldBallId);
+    for (const r of this.rotators) {
+      for (const id of r.queue) busy.add(id);
+      if (r.riding) busy.add(r.riding.ballId);
+    }
+    const lift = ROTATOR.surfaceY + BALL_RADIUS + 0.002;
+    const place = (r: (typeof this.rotators)[number], ballId: number, local: Vec3, v: Vec3 = [0, 0, 0]) => {
+      const b = this.balls.find((x) => x.id === ballId);
+      if (!b) return;
+      const w = rotatorToWorld(r.device, local);
+      b.body.setTranslation({ x: w[0], y: w[1], z: w[2] }, true);
+      b.body.setLinvel({ x: v[0], y: v[1], z: v[2] }, true);
+      b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    };
+    for (const r of this.rotators) {
+      const { degreesPerSecond, direction } = rotatorParams(r.device);
+      // 信号が ON（配線なしなら常に）の間は回る。OFF になったら、まっすぐの向き（180°ごと）まで回ってから止まる
+      let dA = direction * ((degreesPerSecond * Math.PI) / 180) * dt;
+      if (!this.signalOn(r.deviceId)) dA = parkStep(r.angle, dA);
+      // 入口に来た球を列に並べる
+      for (const b of this.balls) {
+        if (busy.has(b.id)) continue;
+        const t = b.body.translation();
+        if (atRotatorEntry(rotatorToLocal(r.device, [t.x, t.y, t.z]))) {
+          r.queue.push(b.id);
+          busy.add(b.id);
+        }
+      }
+      // 台が空いていて、レールが入口の向きにそろっていれば、先頭の球を乗せる
+      if (!r.riding && r.queue.length > 0 && alignedWithEntry(r.angle)) {
+        r.riding = { ballId: r.queue.shift()!, phase: 'slide', t: 0, turned: 0 };
+      }
+      r.queue.forEach((id, i) => place(r, id, [0, lift, -ROTATOR.gateD - i * ROTATOR.queueGap]));
+      if (r.riding) {
+        const ride = r.riding;
+        ride.turned += dA;
+        if (ride.phase === 'slide') {
+          ride.t = Math.min(1, ride.t + dt / ROTATOR.slideSeconds);
+          // 入口から中央へ（台と一緒に回りながら）
+          const along = -ROTATOR.gateD * (1 - ride.t);
+          const d = travelDir(ride.turned);
+          place(r, ride.ballId, [d[0] * along, lift, d[2] * along]);
+          if (ride.t >= 1) ride.phase = 'ride';
+        } else {
+          place(r, ride.ballId, [0, lift, 0]);
+        }
+        const dir = travelDir(ride.turned);
+        if (ride.phase === 'ride' && exitFor(dir)) {
+          // 出口の向きにぴったり合わせて送り出す
+          const e = exitFor(dir)!;
+          const exact: Vec3 = e === 'front' ? [0, 0, 1] : e === 'left' ? [1, 0, 0] : [-1, 0, 0];
+          const yaw = (r.device.rotationYDeg * Math.PI) / 180;
+          const wv = rotateY(exact, yaw).map((x) => x * ROTATOR.releaseSpeed) as Vec3;
+          place(r, ride.ballId, [0, lift, 0], wv);
+          r.riding = null;
+          r.releases++;
+        }
+      }
+      r.angle += dA;
+    }
+  }
+
+  /** 台の角度（描画用） */
+  rotatorAngles(): Map<string, number> {
+    return new Map(this.rotators.map((r) => [r.deviceId, r.angle]));
+  }
+
+  /** 回転装置の台（走行面と同じ高さの平らな床）。台の回転は球の運び方で表し、当たり判定は回さない */
+  private addRotatorDeck(d: PlacedDevice): void {
+    const R = this.R;
+    const yaw = (d.rotationYDeg * Math.PI) / 180;
+    const c = rotatorToWorld(d, [0, ROTATOR.surfaceY - 0.025, 0]);
+    const body = this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(...c).setRotation(quatFromYawPitch(yaw, 0)));
+    const h = ROTATOR.half;
+    this.world.createCollider(R.ColliderDesc.roundCuboid(h - 0.01, 0.015, h - 0.01, 0.01).setFriction(MATERIAL.railFriction), body);
   }
 
   /** 磁石：範囲内の鉄球に力を加える（配置順・球の順に固定。決定論のため力は速度の変化として直接加える） */
