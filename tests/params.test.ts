@@ -12,8 +12,8 @@ const launcher: PlacedDevice = { id: 'L', type: 'launcher', position: [0, 0, 0],
 const spring = (params?: Record<string, number>): PlacedDevice => ({ id: 'S', type: 'spring', position: [0, 0, 1.3], rotationYDeg: 0, params });
 
 describe('設定の定義', () => {
-  it('発射機は 速さ・角度・間隔、バネは 打ち上げの速さ・天板の傾き、レールは 下る高さ・長さ', () => {
-    expect(PARAM_SPECS.launcher.map((s) => s.key)).toEqual(['launchSpeed', 'angleDegrees', 'cooldownSeconds']);
+  it('発射機は 速さ・角度・間隔・撃つ数、バネは 打ち上げの速さ・天板の傾き、レールは 下る高さ・長さ', () => {
+    expect(PARAM_SPECS.launcher.map((s) => s.key)).toEqual(['launchSpeed', 'angleDegrees', 'cooldownSeconds', 'shots']);
     expect(PARAM_SPECS.spring.map((s) => s.key)).toEqual(['launchSpeed', 'tiltDegrees']);
     expect(PARAM_SPECS.rail.map((s) => s.key)).toEqual(['slopeMeters', 'lengthMeters', 'lean']);
   });

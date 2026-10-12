@@ -3,14 +3,15 @@ import { getDeviceDef, type Vec3 } from './catalog';
 import { GRAVITY, PHYSICS_DT } from './constants';
 import { buildLabBoxes, type LabBox } from './lab';
 import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
+import { PADDLE } from './drive';
 import type { PlacedDevice, SliceLayout } from './layout';
 import { inGoal, platformHeight } from './goal';
 import { curveShape, pathMesh, shapeMesh } from './curveGeometry';
 import { LOOP, loopFrame, loopRadius } from './loopGeometry';
-import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
+import { BRIDGE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel, magnetParams } from './magnet';
-import { BUG_TUNING, facingRepelPairs, onFloor, slickDirection, wornFrictionFactor, type BugTrigger, type MagnetPair } from './bugs';
+import { BUG_TUNING, closedLoops, facingRepelPairs, loopKey, onFloor, seeded, slickDirection, wornFrictionFactor, type BugArm, type BugTrigger, type LoopCheckpoint, type MagnetPair } from './bugs';
 import { inSwitchZone, signalSources } from './switch';
 import { ROTATOR, alignedWithEntry, atRotatorEntry, exitFor, rotatorParams, rotatorToLocal, rotatorToWorld, travelDir } from './rotator';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
@@ -171,7 +172,7 @@ export class Simulation {
   readonly labBoxes: LabBox[];
   private world!: World;
   private balls: { id: number; body: RigidBody; prev: BallState }[] = [];
-  private launchers: (LauncherPlan & LauncherState)[] = [];
+  private launchers: (LauncherPlan & LauncherState & { fired: number })[] = [];
   private springs: (SpringPlan & SpringState & { plate: RigidBody })[] = [];
   private goals: (GoalState & { device: PlacedDevice })[] = [];
   private paddles: (PaddleState & { device: PlacedDevice; inside: Set<number> })[] = [];
@@ -188,6 +189,20 @@ export class Simulation {
   private railPasses = new Map<string, number>();
   private railAlong = new Map<string, number>();
   private switches: (SwitchState & { device: PlacedDevice; inside: Set<number> })[] = [];
+  // BUG-03：閉じたレールの見張り地点と、球ごとの記録
+  private loops: LoopCheckpoint[] = [];
+  private loopSide = new Map<string, number>();
+  private loopLaps = new Map<string, { key: string; count: number; saved: BallState | null; active: boolean }>();
+  // BUG-15・BUG-30：再生ごとに外から準備される（arm）。リセットで消える
+  private arm: BugArm = {};
+  private branchUsed = false;
+  private watchUsed = false;
+  private watchMagnetLeft = 0;
+  /** 永久機関の検証用：外の力（発射機・バネ・回転台・切り替わる磁石）が働いた回数と、出力（羽根車・スイッチ）の回数 */
+  private external = { launcher: 0, spring: 0, rotator: 0, magnet: 0 };
+  private magnetPowered = new Map<string, boolean>();
+  /** BUG-15 用：この再生の要約 */
+  private _runPrint: string | null = null;
   /** 信号を受ける装置ID → 配線されたスイッチID */
   private signalFrom = new Map<string, string[]>();
   private nextBallId = 0;
@@ -263,14 +278,18 @@ export class Simulation {
     for (const b of this.balls) b.prev = readBody(b.body);
     this.stepSwitches();
     for (const l of this.launchers) {
+      // 撃つ数が決まっていて、撃ち終えた発射機は何もしない
+      const spent = l.params.shots > 0 && l.fired >= l.params.shots;
       // 配線された発射機は信号が ON の間だけ撃つ（OFF の間は発射を待たせ、ON になったらすぐ撃つ）
-      if (!this.signalOn(l.deviceId)) l.nextFireTick = Math.max(l.nextFireTick, this._tick + 1);
+      if (spent) l.waiting = null;
+      else if (!this.signalOn(l.deviceId)) l.nextFireTick = Math.max(l.nextFireTick, this._tick + 1);
       else if (this._tick >= l.nextFireTick) {
         l.nextFireTick += l.periodTicks;
         this.fire(l);
       }
       const reloadReady = l.lastFireTick === null || this._tick - l.lastFireTick >= l.reloadTicks;
-      if (l.loadedBallId === null && reloadReady) this.load(l, l.hopperPoint);
+      const more = l.params.shots === 0 || l.fired < l.params.shots;
+      if (l.loadedBallId === null && reloadReady && more) this.load(l, l.hopperPoint);
     }
     for (const sp of this.springs) this.stepSpring(sp);
     this.stepDrive();
@@ -279,6 +298,7 @@ export class Simulation {
     this.applyBugEffects();
     this.world.step();
     this.detectBugs();
+    if (this._tick === BUG_TUNING.repeatAtTick) this._runPrint = this.makeRunPrint();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
       const t = b.body.translation();
@@ -331,6 +351,7 @@ export class Simulation {
     this.stillTicks.delete(b.id);
     this.slick.delete(b.id);
     for (const k of [...this.railAlong.keys()]) if (k.endsWith(`:${b.id}`)) this.railAlong.delete(k);
+    for (const m of [this.loopSide, this.loopLaps]) for (const k of [...m.keys()]) if (k.endsWith(`:${b.id}`)) m.delete(k);
     this.world.removeRigidBody(b.body);
     this.balls.splice(index, 1);
   }
@@ -361,7 +382,8 @@ export class Simulation {
       }
       for (const id of now) {
         if (!p.inside.has(id)) {
-          p.target += PADDLE.stepRad;
+          // BUG-30：見ていた羽根車は、次の1回だけ2つ分回る
+          p.target += PADDLE.stepRad * (this.watchHit(p.deviceId) ? 2 : 1);
           p.passes++;
         }
       }
@@ -471,7 +493,8 @@ export class Simulation {
       ball.body.setTranslation({ x: at[0], y: at[1], z: at[2] }, true);
       ball.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
       if (sp.t >= sp.compressTicks) {
-        const v = sp.params.launchSpeed;
+        const v = sp.params.launchSpeed * (this.watchHit(sp.deviceId) ? BUG_TUNING.watchSpringFactor : 1);
+        this.external.spring++;
         ball.body.setLinvel({ x: sp.normal[0] * v, y: sp.normal[1] * v, z: sp.normal[2] * v }, true);
         sp.phase = 'recover';
         sp.t = 0;
@@ -525,7 +548,7 @@ export class Simulation {
   }
 
   /** 装填済みで溝の上に落ち着いている球を押し出す。無ければ理由を記録して見送る */
-  private fire(l: LauncherPlan & LauncherState): void {
+  private fire(l: LauncherPlan & LauncherState & { fired: number }): void {
     const loaded = this.balls.find((b) => b.id === l.loadedBallId);
     const settled =
       loaded !== undefined &&
@@ -538,9 +561,13 @@ export class Simulation {
       l.waitingSince ??= this._tick;
       return;
     }
-    loaded.body.setLinvel({ x: l.velocity[0], y: l.velocity[1], z: l.velocity[2] }, true);
+    // BUG-30：見ていた発射機は、次の1発だけ速さが変わる
+    const k = this.watchHit(l.deviceId) ? BUG_TUNING.watchLaunchFactor : 1;
+    loaded.body.setLinvel({ x: l.velocity[0] * k, y: l.velocity[1] * k, z: l.velocity[2] * k }, true);
     loaded.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     l.loadedBallId = null;
+    l.fired++;
+    this.external.launcher++;
     l.lastFireTick = this._tick;
     l.waiting = null;
     l.waitingSince = null;
@@ -574,6 +601,7 @@ export class Simulation {
     const id = this.nextBallId++;
     this.balls.push({ id, body, prev: readBody(body) });
     l.loadedBallId = id;
+    if (this._tick > 0) this.external.launcher++;
   }
 
   dispose(): void {
@@ -598,6 +626,16 @@ export class Simulation {
       .map((d) => ({ deviceId: d.id, device: d, on: false, toggles: 0, inside: new Set<number>() }));
     this.signalFrom = signalSources(this._layout.devices);
     this.bugTriggers = [];
+    this.loops = closedLoops(this._layout.devices);
+    this.loopSide = new Map();
+    this.loopLaps = new Map();
+    this.arm = {};
+    this.branchUsed = false;
+    this.watchUsed = false;
+    this.watchMagnetLeft = 0;
+    this.external = { launcher: 0, spring: 0, rotator: 0, magnet: 0 };
+    this.magnetPowered = new Map();
+    this._runPrint = null;
     this.stillTicks = new Map();
     this.slick = new Map();
     this.magnetPairs = facingRepelPairs(this.magnets).map((p) => ({ ...p, centerTicks: 0, flipped: false }));
@@ -701,6 +739,7 @@ export class Simulation {
       // 最初の球は装填済み（初期状態で溝の上に見える）。最初の発射は再生した瞬間（tick 0）
       const runtime = {
         ...plan,
+        fired: 0,
         nextFireTick: 0,
         lastFireTick: null,
         loadedBallId: null,
@@ -753,6 +792,8 @@ export class Simulation {
       }
       for (const id of now) {
         if (s.inside.has(id)) continue;
+        // BUG-30：見ていたスイッチは、次の1回だけ切り替わらない
+        if (this.watchHit(s.deviceId)) continue;
         s.on = !s.on;
         s.toggles++;
       }
@@ -831,15 +872,24 @@ export class Simulation {
         const dir = travelDir(ride.turned);
         if (ride.phase === 'ride' && exitFor(dir)) {
           // 出口の向きにぴったり合わせて送り出す
-          const e = exitFor(dir)!;
+          let e = exitFor(dir)!;
+          // BUG-15：準備されていれば、この再生で最初の分岐だけ、決まった種で別の出口を選び直す
+          if (this.arm.branchSeed !== undefined && !this.branchUsed) {
+            this.branchUsed = true;
+            const others = (['front', 'left', 'right'] as const).filter((x) => x !== e);
+            e = others[Math.floor(seeded(this.arm.branchSeed) * others.length)];
+            this.bugTriggers.push({ id: 'BUG-15', tick: this._tick, at: [...r.device.position] });
+          }
           const exact: Vec3 = e === 'front' ? [0, 0, 1] : e === 'left' ? [1, 0, 0] : [-1, 0, 0];
           const yaw = (r.device.rotationYDeg * Math.PI) / 180;
-          const wv = rotateY(exact, yaw).map((x) => x * ROTATOR.releaseSpeed) as Vec3;
+          const speed = ROTATOR.releaseSpeed * (this.watchHit(r.deviceId) ? BUG_TUNING.watchReleaseFactor : 1);
+          const wv = rotateY(exact, yaw).map((x) => x * speed) as Vec3;
           place(r, ride.ballId, [0, lift, 0], wv);
           r.riding = null;
           r.releases++;
         }
       }
+      if (dA !== 0 || r.riding || r.queue.length > 0) this.external.rotator++;
       r.angle += dA;
     }
   }
@@ -935,6 +985,139 @@ export class Simulation {
         if (f < 1) for (const c of this.railColliders.get(track.deviceId) ?? []) c.setFriction(MATERIAL.railFriction * f);
       }
     }
+    this.detectLoops();
+  }
+
+  /**
+   * BUG-03 の判定と効果（条件は開発用資料。球の状態は量子化して比べる）。
+   * 効果：見張り地点で覚えた球の状態に戻して、周回の損失を打ち消す。覚えた状態から離れすぎていたら効果は終わる（安全策）。
+   */
+  private detectLoops(): void {
+    const T = BUG_TUNING;
+    this.loops.forEach((cp, li) => {
+      for (const b of this.balls) {
+        const t = b.body.translation();
+        const p: Vec3 = [t.x, t.y, t.z];
+        const rel: Vec3 = [p[0] - cp.at[0], p[1] - cp.at[1], p[2] - cp.at[2]];
+        const along = rel[0] * cp.dir[0] + rel[2] * cp.dir[2];
+        const off = Math.hypot(rel[0] - along * cp.dir[0], rel[2] - along * cp.dir[2], rel[1]);
+        const key = `${li}:${b.id}`;
+        const prev = this.loopSide.get(key);
+        this.loopSide.set(key, along);
+        if (prev === undefined || !(prev < 0 && along >= 0) || off > T.loopCatch) continue;
+        const now = readBody(b.body);
+        const k = loopKey(cp, p, now.linvel);
+        const lap = this.loopLaps.get(key) ?? { key: '', count: 0, saved: null, active: false };
+        if (lap.active && lap.saved) {
+          const s = lap.saved;
+          const v0 = Math.hypot(...s.linvel);
+          const v1 = Math.hypot(...now.linvel);
+          const d = Math.hypot(p[0] - s.position[0], p[1] - s.position[1], p[2] - s.position[2]);
+          if (Math.abs(v1 - v0) > v0 * T.loopKeepRatio || d > T.loopKeepDist) {
+            lap.active = false;
+            lap.count = 0;
+            lap.key = '';
+          } else {
+            b.body.setTranslation({ x: s.position[0], y: s.position[1], z: s.position[2] }, true);
+            b.body.setRotation({ x: s.rotation[0], y: s.rotation[1], z: s.rotation[2], w: s.rotation[3] }, true);
+            b.body.setLinvel({ x: s.linvel[0], y: s.linvel[1], z: s.linvel[2] }, true);
+            b.body.setAngvel({ x: s.angvel[0], y: s.angvel[1], z: s.angvel[2] }, true);
+          }
+          this.loopLaps.set(key, lap);
+          continue;
+        }
+        lap.count = lap.key === k ? lap.count + 1 : 1;
+        lap.key = k;
+        if (lap.count >= T.loopLaps) {
+          lap.active = true;
+          lap.saved = now;
+          if (!this.bugTriggers.some((x) => x.id === 'BUG-03')) this.bugTriggers.push({ id: 'BUG-03', tick: this._tick, at: [...cp.at] });
+        }
+        this.loopLaps.set(key, lap);
+      }
+    });
+  }
+
+  /** この再生の要約（配置と、決まった tick での球・装置の状態）。まだその tick に達していなければ null */
+  get runFingerprint(): string | null {
+    return this._runPrint;
+  }
+
+  private makeRunPrint(): string {
+    const r = (v: number) => Math.round(v * 1e5);
+    const balls = this.readBalls().map((b) => [...b.position, ...b.linvel].map(r).join(','));
+    return JSON.stringify([this._layout.seed, this._layout.devices, balls, this.goals.map((g) => g.hits), this.switches.map((x) => x.on)]);
+  }
+
+  /** BUG-30：見ていた装置の挙動を、この1回だけ変えるか（変えたら記録して、もう変えない） */
+  private watchHit(deviceId: string): boolean {
+    if (this.watchUsed || this.arm.watchedId !== deviceId) return false;
+    this.watchUsed = true;
+    const d = this._layout.devices.find((x) => x.id === deviceId);
+    this.bugTriggers.push({ id: 'BUG-30', tick: this._tick, at: d ? [...d.position] : [0, 0, 0] });
+    return true;
+  }
+
+  /**
+   * 再生の前に、物理の外で準備された隠しバグを渡す（BUG-15・BUG-30）。リセット・配置の変更で消える。
+   * 決定論：同じ配置・同じ準備なら、毎回同じ結果になる。
+   */
+  armBugs(arm: BugArm): void {
+    this.arm = { ...arm };
+  }
+
+  get armed(): Readonly<BugArm> {
+    return this.arm;
+  }
+
+  /** 永久機関の検証用：外の力が働いた回数（発射・装填／バネ／回転台が動いた tick／磁石の ON・OFF） */
+  externalInputs(): { launcher: number; spring: number; rotator: number; magnet: number } {
+    return { ...this.external };
+  }
+
+  /** 永久機関の検証用：出力の回数（羽根車を回した球・スイッチの切り替え） */
+  outputEvents(): number {
+    return this.paddles.reduce((n, p) => n + p.passes, 0) + this.switches.reduce((n, s) => n + s.toggles, 0);
+  }
+
+  /**
+   * 永久機関の検証用の状態（演出・描画は含まない）。
+   * - balls：球ごとの [位置3, 向き4, 速度3, 角速度3, 隠しバグの球ごとの状態…]。球の ID には頼らない（並べ方は検証側で決める）
+   * - exact：一致しなければならない離散の状態（スイッチ・バネの段階・発射機・隠しバグの段階など）
+   * - approx：誤差を許して比べる連続の状態（羽根車・可動橋・回転台の角度など）
+   */
+  verifierState(): { balls: number[][]; exact: number[]; approx: number[] } {
+    const balls = this.balls.map((b) => {
+      const s = readBody(b.body);
+      const lapKeys = this.loops.map((_, li) => this.loopLaps.get(`${li}:${b.id}`));
+      return [
+        ...s.position,
+        ...s.rotation,
+        ...s.linvel,
+        ...s.angvel,
+        this.stillTicks.get(b.id) ?? 0,
+        this.slick.get(b.id)?.left ?? 0,
+        lapKeys.filter((l) => l?.active).length,
+      ];
+    });
+    const exact: number[] = [this.balls.length];
+    for (const sw of this.switches) exact.push(sw.on ? 1 : 0, sw.inside.size);
+    for (const sp of this.springs) exact.push(['ready', 'compress', 'recover'].indexOf(sp.phase), sp.t, sp.heldBallId === null ? 0 : 1);
+    for (const l of this.launchers) {
+      const spent = l.params.shots > 0 && l.fired >= l.params.shots;
+      exact.push(l.loadedBallId === null ? 0 : 1, spent ? -1 : Math.max(0, l.nextFireTick - this._tick), ['max_balls', 'loading', null].indexOf(l.waiting));
+    }
+    for (const r of this.rotators) exact.push(r.queue.length, r.riding ? (r.riding.phase === 'slide' ? 1 : 2) : 0);
+    for (const p of this.paddles) exact.push(p.inside.size);
+    for (const q of this.magnetPairs) exact.push(q.flipped ? 1 : 0, q.centerTicks);
+    for (const track of this.tracks) exact.push(wornFrictionFactor(this.railPasses.get(track.deviceId) ?? 0));
+    exact.push(this.watchMagnetLeft);
+    const approx: number[] = [];
+    const mod = (a: number, m: number) => ((a % m) + m) % m;
+    for (const p of this.paddles) approx.push(mod(p.angle, PADDLE.stepRad), p.target - p.angle);
+    for (const b of this.bridges) approx.push(b.angle);
+    for (const r of this.rotators) approx.push(mod(r.angle, Math.PI), r.riding ? r.riding.t : 0, r.riding ? mod(r.riding.turned, 2 * Math.PI) : 0);
+    return { balls, exact, approx };
   }
 
   /** BUG-16 が発動した向かい合う磁石の組の近くか */
@@ -963,6 +1146,14 @@ export class Simulation {
   /** 磁石：範囲内の鉄球に力を加える（配置順・球の順に固定。決定論のため力は速度の変化として直接加える） */
   private stepMagnets(): void {
     if (this.magnets.length === 0) return;
+    // 信号で ON/OFF が切り替わった磁石は「外の力」として数える（永久機関の検証用）
+    for (const m of this.magnets) {
+      const on = this.signalOn(m.id);
+      const was = this.magnetPowered.get(m.id);
+      if (was !== undefined && was !== on) this.external.magnet++;
+      this.magnetPowered.set(m.id, on);
+    }
+    if (this.watchMagnetLeft > 0) this.watchMagnetLeft--;
     for (const b of this.balls) {
       const t = b.body.translation();
       let ax = 0;
@@ -971,8 +1162,11 @@ export class Simulation {
       for (const m of this.magnets) {
         if (!this.signalOn(m.id)) continue;
         const flipped = this.flippedPairNear(m.id, [t.x, t.y, t.z]);
-        const a = flipped ? flippedAccel(m, [t.x, t.y, t.z]) : magnetAccel(m, [t.x, t.y, t.z]);
+        let a = flipped ? flippedAccel(m, [t.x, t.y, t.z]) : magnetAccel(m, [t.x, t.y, t.z]);
         if (!a) continue;
+        // BUG-30：見ていた磁石は、次に球へ力を掛けるときだけ、しばらく向きが逆になる
+        if (m.id === this.arm.watchedId && !this.watchUsed && this.watchHit(m.id)) this.watchMagnetLeft = BUG_TUNING.watchMagnetTicks;
+        if (m.id === this.arm.watchedId && this.watchMagnetLeft > 0) a = [-a[0], -a[1], -a[2]];
         ax += a[0];
         ay += a[1];
         az += a[2];

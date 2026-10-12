@@ -58,6 +58,9 @@ const gearChain = (): PlacedDevice[] => [
 ];
 /** 床の発射機とレール（rail_1 の出口：z=−1, 高さ0.55m）。その先 z=−0.4 に回転台を置ける */
 const turnBase = (): PlacedDevice[] => [launcher, rail('rail_1', 0.4, -2)];
+/** 床へ転がり出る発射機（3秒ごと）とレール3本（rail_3 の出口：z=3, 床の高さ）。ステージ4用 */
+const floorChain = (): PlacedDevice[] => [{ ...launcher, params: { cooldownSeconds: 3 } }, rail('rail_1', 0.4, -2), rail('rail_2', 0.2, 0), rail('rail_3', 0, 2)];
+const magnet = (id: string, x: number, z: number, rotationYDeg: number, params: Record<string, number>): PlacedDevice => ({ id, type: 'magnet', position: [x, 0, z], rotationYDeg, params });
 /** 高い所から始まる発射機とレール3本（1-2 と同じ。rail_3 の出口：z=3, 高さ0.75m） */
 const highChain = (): PlacedDevice[] => [{ ...launcher, position: [0, 0.6, -3.65] }, rail('rail_1', 1.0, -2), rail('rail_2', 0.8, 0), rail('rail_3', 0.6, 2)];
 
@@ -258,6 +261,66 @@ export const STAGES: StageDef[] = [
     solution: [
       { id: 'gearbox_1', type: 'gearbox', position: [0.75, 0, 0.25], rotationYDeg: 270, params: { gearRatio: 2 } },
       { id: 'shaft_1', type: 'shaft', position: [0.75, 0, 1.75], rotationYDeg: 0, params: { lengthMeters: 1.5 } },
+    ],
+  },
+  // ---- ステージ4「ひきあう」（磁石と極性。ステージ資料 v1.0 は題だけなので、内容は試作で作った, D-43）
+  {
+    id: '4-1',
+    name: '引きよせる',
+    objective: '磁石を置いて、転がる球を横のゴールへ引きよせよう',
+    hint: '届く距離、足りていますか？',
+    devices: [...floorChain(), { id: 'goal_1', type: 'goal', position: [1, 0, 4.5], rotationYDeg: 0 }],
+    inventory: { magnet: 1 },
+    required: ['ball_enter_goal'],
+    solution: [magnet('magnet_1', 2, 4, 270, { radius: 2.5 })],
+  },
+  {
+    id: '4-2',
+    name: 'しりぞける',
+    objective: '今度のゴールは反対側。磁石で球を押して届けよう',
+    hint: '引くだけが磁石ではありません。',
+    devices: [...floorChain(), { id: 'goal_1', type: 'goal', position: [-1, 0, 4.5], rotationYDeg: 0 }],
+    inventory: { magnet: 1 },
+    required: ['ball_enter_goal'],
+    solution: [magnet('magnet_1', 1.25, 3.5, 270, { mode: -1, maxForceNewton: 40, radius: 2.5 })],
+  },
+  {
+    id: '4-3',
+    name: '遠くのゴール',
+    objective: '遠く離れたゴールへ。磁石の向きと置き場所を考えよう',
+    hint: '磁石は、前を向いている方にしか効きません。',
+    devices: [...floorChain(), { id: 'goal_1', type: 'goal', position: [-2.5, 0, 4], rotationYDeg: 0 }],
+    inventory: { magnet: 1 },
+    required: ['ball_enter_goal'],
+    solution: [magnet('magnet_1', -2.5, 5, 180, { maxForceNewton: 40, radius: 3 })],
+  },
+  {
+    id: '4-4',
+    name: 'つり合い',
+    objective: '左の磁石が球を引っぱってしまう。もう1台の磁石で打ち消して、まっすぐゴールへ',
+    hint: 'つり合い、という言葉があります。',
+    devices: [...floorChain(), magnet('magnet_1', -1.25, 3.5, 90, { mode: 1, maxForceNewton: 30, radius: 2.5 }), { id: 'goal_1', type: 'goal', position: [0, 0, 5], rotationYDeg: 0 }],
+    inventory: { magnet: 1 },
+    required: ['ball_enter_goal'],
+    solution: [magnet('magnet_2', 1.25, 3.5, 270, { mode: 1, maxForceNewton: 30, radius: 2.5 })],
+  },
+  {
+    id: '4-5',
+    name: '入れ分ける',
+    objective: '磁石とスイッチを置いて、2つのゴールに球を入れ分けよう',
+    hint: 'ひきあう研究の、総まとめです。',
+    devices: [
+      { ...launcher, params: { cooldownSeconds: 2 } },
+      rail('rail_1', 0.4, -2),
+      rail('rail_2', 0.1, 1),
+      { id: 'goal_1', type: 'goal', position: [0, 0, 4.75], rotationYDeg: 0 },
+      { id: 'goal_2', type: 'goal', position: [0.5, 0, 3.5], rotationYDeg: 0 },
+    ],
+    inventory: { magnet: 1, switch: 1 },
+    required: ['all_goals'],
+    solution: [
+      { id: 'switch_1', type: 'switch', position: [0, 0.2, -0.5], rotationYDeg: 0, signalTargets: ['magnet_1'] },
+      magnet('magnet_1', 1.5, 3.5, 270, { mode: 1, maxForceNewton: 40, radius: 2.5 }),
     ],
   },
 ];

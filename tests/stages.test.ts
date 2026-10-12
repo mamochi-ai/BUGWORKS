@@ -192,3 +192,33 @@ describe('ステージ3：ひと工夫しないと解けない', () => {
     expect(play(R, devices, st('3-4'), 14).events.all_goals).toBe(false);
   });
 });
+
+describe('ステージ4：ひと工夫しないと解けない', () => {
+  let R: Rapier;
+  beforeAll(async () => {
+    R = await loadRapier();
+  });
+  const st = (id: string) => STAGES.find((s) => s.id === id)!;
+  const withSolution = (id: string, change: (d: PlacedDevice) => PlacedDevice) => [...st(id).devices, ...st(id).solution.map(change)];
+  const defaults = (d: PlacedDevice) => (d.type === 'magnet' ? { ...d, params: {} } : d);
+
+  it('4-1 / 4-3 / 4-4：磁石を置いただけ（強さ・届く距離が既定のまま）では届かない', () => {
+    for (const id of ['4-1', '4-3', '4-4']) expect(play(R, withSolution(id, defaults), st(id), 12).clearedAt, id).toBeNull();
+  });
+
+  it('4-2：「引きよせる」のままでは反対側のゴールに入らない', () => {
+    const devices = withSolution('4-2', (d) => (d.type === 'magnet' ? { ...d, params: { ...d.params, mode: 1 } } : d));
+    expect(play(R, devices, st('4-2'), 12).clearedAt).toBeNull();
+  });
+
+  it('4-3：磁石の向きが違うと届かない', () => {
+    const devices = withSolution('4-3', (d) => (d.type === 'magnet' ? { ...d, rotationYDeg: 0 } : d));
+    expect(play(R, devices, st('4-3'), 12).clearedAt).toBeNull();
+  });
+
+  it('4-5：スイッチを磁石に配線しないと、磁石がいつも効いて片方のゴールにしか入らない', () => {
+    const r = play(R, withSolution('4-5', (d) => ({ ...d, signalTargets: [] })), st('4-5'), 12);
+    expect(r.events.ball_enter_goal).toBe(true);
+    expect(r.events.all_goals).toBe(false);
+  });
+});

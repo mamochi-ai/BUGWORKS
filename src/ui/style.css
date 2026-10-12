@@ -278,3 +278,48 @@ html, body {
 @keyframes confetti-fall {
   to { transform: translate(var(--drift), 95vh) rotate(var(--spin)); opacity: 0; }
 }
+
+/* 永久機関の検証（D-41） */
+.pm-progress { display: flex; flex-direction: column; gap: 6px; }
+.pm-progress progress { width: 100%; height: 12px; accent-color: var(--cyan); }
+.pm-status { font-size: 13.5px; }
+.pm-facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
+.pm-facts dt { color: var(--muted); }
+.pm-facts dd { margin: 0; overflow-wrap: anywhere; }
+.pm-result { display: flex; flex-direction: column; gap: 8px; }
+.pm-verdict { font-size: 22px; font-weight: 800; color: var(--orange); }
+.pm-verdict[data-status='VERIFIED'] { color: var(--cyan); font-size: 28px; letter-spacing: 0.06em; }
+.pm-reason { font-size: 14px; line-height: 1.5; }
+@media (prefers-reduced-motion: no-preference) {
+  .pm-verdict[data-status='VERIFIED'] { animation: pm-stamp 520ms cubic-bezier(0.2, 1.4, 0.4, 1); }
+}
+@keyframes pm-stamp { from { transform: scale(1.8) rotate(-6deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* 隠しバグの発見：画面のノイズ（D-44） */
+.glitch-flash {
+  position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+  background:
+    repeating-linear-gradient(0deg, rgba(63, 212, 255, 0.18) 0 2px, transparent 2px 5px),
+    linear-gradient(90deg, rgba(255, 122, 26, 0.25), transparent 30%, transparent 70%, rgba(63, 212, 255, 0.25));
+  animation: glitch-flash 650ms steps(8) forwards;
+}
+@keyframes glitch-flash {
+  0% { opacity: 1; transform: translateX(-8px); clip-path: inset(0 0 60% 0); }
+  25% { opacity: 0.8; transform: translateX(6px); clip-path: inset(40% 0 10% 0); }
+  50% { opacity: 0.9; transform: translateX(-3px); clip-path: inset(10% 0 30% 0); }
+  100% { opacity: 0; transform: none; clip-path: inset(0); }
+}
+
+/* 上のバーのボタンが増えたので、狭い画面では文字を省く（ボタンの名前は aria-label で読み上げる） */
+@media (max-width: 1400px) {
+  .brand small { display: none; }
+  .hud-top .bp-open.compact span { display: none; }
+}
+@media (max-width: 1100px) {
+  .hud-top { gap: 8px; padding: 8px 10px; }
+  .hud-top .bp-open span { display: none; }
+  .hud-top .bp-open { padding: 4px 10px; }
+}
+@media (max-width: 900px) {
+  .hud-top .brand { display: none; }
+}

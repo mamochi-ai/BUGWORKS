@@ -1,5 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { BUG_TUNING, IMPLEMENTED_BUGS, facingRepelPairs, wornFrictionFactor } from '../src/sim/bugs';
+import { BUG_TUNING, IMPLEMENTED_BUGS, closedLoops, facingRepelPairs, wornFrictionFactor } from '../src/sim/bugs';
+import { RepeatTracker, WatchTracker } from '../src/bugs/trackers';
+import { rotatorRing } from './loops';
 import { PHYSICS_HZ } from '../src/sim/constants';
 import type { PlacedDevice } from '../src/sim/layout';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
@@ -22,8 +24,8 @@ const magnetsAt = (z: number, mode = -1): PlacedDevice[] => [
 ];
 
 describe('隠しバグ（定義）', () => {
-  it('まず3種（マスター仕様 §10 手順3）', () => {
-    expect(IMPLEMENTED_BUGS).toEqual(['BUG-12', 'BUG-16', 'BUG-18']);
+  it('まず3種（マスター仕様 §10 手順3）に、BUG-03・15・30 を足した6種（D-42）', () => {
+    expect(IMPLEMENTED_BUGS).toEqual(['BUG-03', 'BUG-12', 'BUG-15', 'BUG-16', 'BUG-18', 'BUG-30']);
   });
 
   it('向かい合う磁石の組は「しりぞける」同士で、向きが合うときだけ', () => {
@@ -99,8 +101,116 @@ describe('隠しバグ（物理）', () => {
   });
 });
 
+describe('隠しバグ（BUG-03・15・30, D-42）', () => {
+  let R2: Rapier;
+  beforeAll(async () => {
+    R2 = await loadRapier();
+  });
+  const sim = (devices: PlacedDevice[]) => new Simulation(R2, { seed: 404, devices });
+  const ids = (s: Simulation) => s.bugEvents().map((b) => b.id);
+  const go = (s: Simulation, sec: number) => {
+    for (let i = 0; i < PHYSICS_HZ * sec; i++) s.step();
+    return s;
+  };
+
+  it('BUG-03：閉じたレール（球の通り道の輪）を見つける', () => {
+    const loops = closedLoops(rotatorRing());
+    expect(loops).toHaveLength(1);
+    expect(loops[0].deviceId).toBe('rotator_1');
+    expect(closedLoops(FLOOR_CHAIN.devices)).toEqual([]);
+  });
+
+  it('BUG-03：起きる配置では毎回同じ tick に起き（決定論）、起きない配置では起きない', () => {
+    const a = go(sim(rotatorRing()), 45);
+    const ev = a.bugEvents().find((b) => b.id === 'BUG-03');
+    expect(ev).toBeDefined();
+    expect(go(sim(rotatorRing()), 45).bugEvents()).toEqual(a.bugEvents());
+    // 効果が続いている球がある（検証用の状態にも入る）
+    expect(a.verifierState().balls.some((b) => b[15] === 1)).toBe(true);
+    expect(ids(go(sim(launcherEvery(1)), 20))).not.toContain('BUG-03');
+  });
+
+  // 3-2 と同じ：回転台で左へ曲げてゴール
+  const turnLeft: PlacedDevice[] = [
+    { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0, params: { shots: 1 } },
+    { id: 'rail_1', type: 'rail', position: [0, 0.4, -2], rotationYDeg: 0 },
+    { id: 'rotator_1', type: 'rotator', position: [0, 0.2, -0.4], rotationYDeg: 0 },
+    { id: 'rail_2', type: 'rail', position: [1.6, 0.2, -0.4], rotationYDeg: 90 },
+    { id: 'goal_1', type: 'goal', position: [3.25, 0, -0.4], rotationYDeg: 0 },
+  ];
+
+  it('BUG-15：準備の判定と、準備された再生で最初の分岐だけ出口が変わること', () => {
+    const t = new RepeatTracker();
+    const normal = go(sim(turnLeft), 15);
+    const print = normal.runFingerprint!;
+    expect(print).toBeTruthy();
+    expect(go(sim(turnLeft), 15).runFingerprint).toBe(print); // 同じ配置なら同じ要約
+    for (let i = 0; i < BUG_TUNING.repeatRuns - 1; i++) t.record(print);
+    expect(t.armed).toBe(false);
+    t.record('ちがう試行');
+    for (let i = 0; i < BUG_TUNING.repeatRuns - 1; i++) t.record(print);
+    expect(t.armed).toBe(false);
+    t.record(print);
+    expect(t.armed).toBe(true);
+
+    expect(normal.goalHits).toBe(1);
+    const s = sim(turnLeft);
+    s.armBugs({ branchSeed: 404 });
+    go(s, 15);
+    expect(ids(s)).toEqual(['BUG-15']);
+    expect(s.goalHits).toBe(0); // 左のゴールではなく、別の出口へ
+    // 準備はリセットで消える（次の再生は元どおり）
+    s.reset();
+    go(s, 15);
+    expect(s.goalHits).toBe(1);
+    t.consumed();
+    expect(t.armed).toBe(false);
+  });
+
+  it('BUG-30：準備の判定（効果の無い装置では準備されない）', () => {
+    const w = new WatchTracker();
+    const launcher = turnLeft[0];
+    for (let i = 0; i < 4; i++) w.observe(launcher);
+    w.layoutChanged(turnLeft, turnLeft.map((d) => (d.id === 'launcher_1' ? { ...d, params: { shots: 2 } } : d)));
+    w.observe(launcher);
+    expect(w.armed).toBeNull();
+    for (let i = 0; i < 4; i++) w.observe(launcher);
+    expect(w.armed).toBe('launcher_1');
+    const rail = turnLeft[1];
+    const w2 = new WatchTracker();
+    for (let i = 0; i < 10; i++) w2.observe(rail);
+    expect(w2.armed).toBeNull();
+  });
+
+  it('BUG-30：準備された装置の次の挙動が1回だけ変わる（発射機・スイッチ）', () => {
+    const s = sim(FLOOR_CHAIN.devices);
+    s.armBugs({ watchedId: 'launcher_1' });
+    s.step();
+    s.step();
+    const fast = Math.hypot(...s.readBalls()[0].linvel);
+    expect(ids(s)).toEqual(['BUG-30']);
+    const n = sim(FLOOR_CHAIN.devices);
+    n.step();
+    n.step();
+    expect(fast).toBeGreaterThan(Math.hypot(...n.readBalls()[0].linvel) * 1.3);
+
+    const sw: PlacedDevice[] = [
+      { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0, params: { shots: 1 } },
+      { id: 'rail_1', type: 'rail', position: [0, 0.4, -2], rotationYDeg: 0 },
+      { id: 'switch_1', type: 'switch', position: [0, 0.2, -0.5], rotationYDeg: 0 },
+    ];
+    const a = go(sim(sw), 4);
+    expect(a.switchStates().get('switch_1')).toBe(true);
+    const b = sim(sw);
+    b.armBugs({ watchedId: 'switch_1' });
+    go(b, 4);
+    expect(b.switchStates().get('switch_1')).toBe(false);
+    expect(ids(b)).toEqual(['BUG-30']);
+  });
+});
+
 describe('バグ図鑑（記録と一覧）', () => {
-  it('40種の一覧。名前と説明を持つのは実装した3種だけ（未実装の内容は配信物に入れない）', async () => {
+  it('40種の一覧。名前と説明を持つのは実装した6種だけ（未実装の内容は配信物に入れない）', async () => {
     const { CODEX } = await import('../src/bugs/codexData');
     expect(CODEX).toHaveLength(40);
     expect(CODEX.filter((c) => c.name).map((c) => c.id)).toEqual([...IMPLEMENTED_BUGS]);
