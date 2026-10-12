@@ -17,7 +17,7 @@ export interface PlacedDevice {
   params?: Record<string, number>;
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet';
 
 export interface SliceLayout {
   seed: number;
@@ -69,5 +69,21 @@ export const GEAR_SAMPLE_LAYOUT: SliceLayout = {
     { id: 'shaft_1', type: 'shaft', position: [0.75, 0, 1.75], rotationYDeg: 0, params: { lengthMeters: 0.5 } },
     { id: 'platform_1', type: 'platform', position: [0, 0, 4.8], rotationYDeg: 0, params: { heightMeters: 0.4 } },
     { id: 'goal_1', type: 'goal', position: [0, 0.4, 5], rotationYDeg: 0 },
+  ],
+};
+
+/**
+ * 見本「磁石でゴール」（DECISIONS.md D-29）：床置きの発射機とレール3本。レールの先は床を転がり、
+ * 右手前の磁石（引きよせる・強さ40N・届く距離2.5m）が球を引きよせ、磁石の前のゴールに入る。磁石が無いとゴールしない。
+ */
+export const MAGNET_SAMPLE_LAYOUT: SliceLayout = {
+  seed: 404,
+  devices: [
+    { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0 },
+    { id: 'rail_1', type: 'rail', position: [0, 0.4, -2], rotationYDeg: 0 },
+    { id: 'rail_2', type: 'rail', position: [0, 0.2, 0], rotationYDeg: 0 },
+    { id: 'rail_3', type: 'rail', position: [0, 0, 2], rotationYDeg: 0 },
+    { id: 'magnet_1', type: 'magnet', position: [1.75, 0, 4.5], rotationYDeg: 270, params: { mode: 1, maxForceNewton: 40, radius: 2.5 } },
+    { id: 'goal_1', type: 'goal', position: [1, 0, 4.5], rotationYDeg: 0 },
   ],
 };

@@ -9,7 +9,7 @@ import { localPort, portWorldPosition, rotateY } from '../sim/railGeometry';
  * 台そのものは常に床に置く。
  */
 export function restsOnSurface(type: PlacedDevice['type']): boolean {
-  return type === 'goal' || type === 'spring' || type === 'platform' || type === 'gearbox' || type === 'shaft';
+  return type === 'goal' || type === 'spring' || type === 'platform' || type === 'gearbox' || type === 'shaft' || type === 'magnet';
 }
 
 /** (x, z) の真下にある台の上面の高さ（無ければ 0 = 床） */

@@ -1,10 +1,10 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
-import { GEAR_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
+import { GEAR_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
 /** パレットに並べる装置 */
-const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge'];
+const PALETTE_TYPES: DeviceType[] = ['rail', 'curve', 'launcher', 'spring', 'platform', 'goal', 'paddle', 'gearbox', 'shaft', 'bridge', 'magnet'];
 /** パレットのボタンに出す短い名前（正式名はボタンの title に出す） */
 const PALETTE_LABELS: Record<DeviceType, string> = {
   rail: 'レール',
@@ -17,6 +17,7 @@ const PALETTE_LABELS: Record<DeviceType, string> = {
   gearbox: '歯車',
   shaft: '軸',
   bridge: '可動橋',
+  magnet: '磁石',
 };
 import { PARAM_SPECS, formatParam, paramValue, stepParam } from '../edit/params';
 import { planLauncher } from '../sim/launcher';
@@ -68,6 +69,7 @@ export class EditPanel {
         <div class="row">
           <button type="button" data-e="sample-spring">バネでゴール</button>
           <button type="button" data-e="sample-gear">歯車で可動橋</button>
+          <button type="button" data-e="sample-magnet">磁石でゴール</button>
         </div>
       </div>
     `;
@@ -124,7 +126,8 @@ export class EditPanel {
       case 'add-paddle':
       case 'add-gearbox':
       case 'add-shaft':
-      case 'add-bridge': {
+      case 'add-bridge':
+      case 'add-magnet': {
         const p = this.deps.addPosition();
         editor.addDevice(action.slice(4) as DeviceType, p.x, p.z);
         break;
@@ -147,6 +150,9 @@ export class EditPanel {
         break;
       case 'sample-gear':
         editor.loadLayout(GEAR_SAMPLE_LAYOUT.devices, 'サンプル「歯車で可動橋」を読み込みました。1個目の球は橋が下りる前に着くので落ちます');
+        break;
+      case 'sample-magnet':
+        editor.loadLayout(MAGNET_SAMPLE_LAYOUT.devices, 'サンプル「磁石でゴール」を読み込みました。床を転がる球を磁石が引きよせます');
         break;
       case 'undo':
         editor.undo();

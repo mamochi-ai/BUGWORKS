@@ -11,6 +11,7 @@ import { LauncherModelFactory } from './LauncherModel';
 import { SpringModelFactory } from './SpringModel';
 import { GoalModelFactory } from './GoalModels';
 import { DriveModelFactory } from './DriveModels';
+import { MagnetModelFactory } from './MagnetModel';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
@@ -29,6 +30,7 @@ export class DeviceLayer {
   private readonly springFactory = new SpringModelFactory(this.mats);
   private readonly goalFactory = new GoalModelFactory(this.mats);
   private readonly driveFactory = new DriveModelFactory(this.mats, this.railFactory);
+  private readonly magnetFactory = new MagnetModelFactory(this.mats);
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
   private readonly supports = new THREE.Group();
   private readonly markers = new THREE.Group();
@@ -89,7 +91,9 @@ export class DeviceLayer {
                       ? this.driveFactory.createGearbox(d)
                       : d.type === 'shaft'
                         ? this.driveFactory.createShaft(d)
-                        : this.driveFactory.createBridge(d);
+                        : d.type === 'magnet'
+                          ? this.magnetFactory.create(d)
+                          : this.driveFactory.createBridge(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
       this.rails.set(d.id, { key, group });
