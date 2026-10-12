@@ -6,7 +6,8 @@ import { quatFromYawPitch } from '../sim/Simulation';
 import { PALETTE } from './palette';
 import { railVisualProfile } from './railVisualProfile';
 import type { PlacedDevice } from '../sim/layout';
-import { curveShape, shapeBounds, shapeFrame } from '../sim/curveGeometry';
+import { curveShape, shapeBounds, shapeFrame, type CurveFrame } from '../sim/curveGeometry';
+import { LOOP, loopBounds, loopFrame, loopRadius } from '../sim/loopGeometry';
 
 /**
  * レールの見た目（試作）。デザイン画 rail_straight_long / rail_connector / rail_support_low を参考に、
@@ -98,18 +99,37 @@ export class RailModelFactory {
 
   /** カーブレール（装置ローカルで作り、装置の位置・回転のグループに入れる） */
   createCurve(device: PlacedDevice): THREE.Group {
-    const p = this.profile;
     const shape = curveShape(device);
+    const b = shapeBounds(shape);
+    return this.createPath(device, (t) => shapeFrame(shape, t), shape.segments, [0, 0.5, 1], { ...b, minY: 0, maxY: 0.5 });
+  }
+
+  /** ループ（縦に1周する走行路）。金具は入口・出口と、4分の1周ごと */
+  createLoop(device: PlacedDevice): THREE.Group {
+    const radius = loopRadius(device);
+    const b = loopBounds(radius);
+    return this.createPath(device, (t) => loopFrame(radius, t), LOOP.segments, [0, 0.25, 0.5, 0.75, 1], { ...b, minY: 0, maxY: b.height });
+  }
+
+  /** 曲がった走行路の見た目：断面 frame(t) に沿って鋼管を通し、金具を付ける */
+  private createPath(
+    device: PlacedDevice,
+    frame: (t: number) => CurveFrame,
+    segments: number,
+    collarAt: number[],
+    bounds: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number },
+  ): THREE.Group {
+    const p = this.profile;
     const group = new THREE.Group();
     group.name = device.id;
     group.position.set(...device.position);
     group.rotation.y = (device.rotationYDeg * Math.PI) / 180;
 
-    // 鋼管：弧の各断面で、横 s・高さ h だけずらした点をつないだ曲線
+    // 鋼管：各断面で、横 s・高さ h だけずらした点をつないだ曲線
     const offsetCurve = (s: number, h: number) =>
       new THREE.CatmullRomCurve3(
-        Array.from({ length: shape.segments + 1 }, (_, i) => {
-          const f = shapeFrame(shape, i / shape.segments);
+        Array.from({ length: segments + 1 }, (_, i) => {
+          const f = frame(i / segments);
           return new THREE.Vector3(...f.pos.map((v, k) => v + f.side[k] * s + f.normal[k] * h));
         }),
       );
@@ -118,7 +138,7 @@ export class RailModelFactory {
         [p.carrier.x, p.carrier.y, p.carrier.radius],
         [p.guard.x, p.guard.y, p.guard.radius],
       ]) {
-        const geo = new THREE.TubeGeometry(offsetCurve(side * x, y), shape.segments * 2, r, 12, false);
+        const geo = new THREE.TubeGeometry(offsetCurve(side * x, y), segments * 2, r, 12, false);
         geo.userData.ownedByDevice = true;
         const m = new THREE.Mesh(geo, this.mats.steel);
         m.castShadow = true;
@@ -126,22 +146,22 @@ export class RailModelFactory {
         group.add(m);
       }
     }
-    // 両端と中央の金具（弧の向きに合わせる）
-    for (const t of [0, 0.5, 1]) {
-      const f = shapeFrame(shape, t);
+    // 金具（走行路の向きと、上下の向き〔ループの上では逆さ〕に合わせる）
+    for (const t of collarAt) {
+      const f = frame(t);
       const along = t === 0 ? p.collar.length / 2 : t === 1 ? -p.collar.length / 2 : 0;
       const collar = this.createCollar(0);
       const at = f.pos.map((v, k) => v + f.tangent[k] * along + f.normal[k] * p.collar.centerY);
       collar.position.set(at[0], at[1], at[2]);
+      collar.up.set(...f.normal);
       collar.lookAt(collar.position.clone().add(new THREE.Vector3(...f.tangent)));
       group.add(collar);
     }
     // タッチ用の当たり判定（外形の箱）
-    const b = shapeBounds(shape);
-    const pickGeo = new THREE.BoxGeometry(b.maxX - b.minX, 0.5, b.maxZ - b.minZ);
+    const pickGeo = new THREE.BoxGeometry(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
     pickGeo.userData.ownedByDevice = true;
     const pick = new THREE.Mesh(pickGeo, this.mats.pick);
-    pick.position.set((b.minX + b.maxX) / 2, 0.25, (b.minZ + b.maxZ) / 2);
+    pick.position.set((bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, (bounds.minZ + bounds.maxZ) / 2);
     pick.name = 'pick_proxy';
     group.add(pick);
     return group;

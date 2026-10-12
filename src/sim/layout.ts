@@ -19,7 +19,7 @@ export interface PlacedDevice {
   signalTargets?: string[];
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet' | 'switch' | 'rotator';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet' | 'switch' | 'rotator' | 'loop';
 
 export interface SliceLayout {
   seed: number;
@@ -145,5 +145,25 @@ export const ROTATOR_SAMPLE_LAYOUT: SliceLayout = {
     { id: 'goal_1', type: 'goal', position: [0, 0, 3], rotationYDeg: 0 },
     { id: 'rail_3', type: 'rail', position: [1.6, 0.2, -0.4], rotationYDeg: 90 },
     { id: 'goal_2', type: 'goal', position: [3.25, 0, -0.4], rotationYDeg: 0 },
+  ],
+};
+
+/**
+ * 見本「ループと上り坂」（DECISIONS.md D-33）：高い発射機から 0.6m ずつ下る坂で勢いをつけ、ループで宙返り →
+ * 0.1m の上り坂 → 45°の曲がり始め → 斜めの直線 → 45°の曲がり終わり → ゴール。
+ * 上り坂を 0.2m にすると上りきれずに戻る（勢いが足りない）。
+ */
+export const LOOP_SAMPLE_LAYOUT: SliceLayout = {
+  seed: 404,
+  devices: [
+    { id: 'launcher_1', type: 'launcher', position: [-0.5, 1.4, -4.65], rotationYDeg: 0 },
+    { id: 'rail_1', type: 'rail', position: [-0.5, 1.4, -3], rotationYDeg: 0, params: { slopeMeters: 0.6 } },
+    { id: 'rail_2', type: 'rail', position: [-0.5, 0.8, -1], rotationYDeg: 0, params: { slopeMeters: 0.6 } },
+    { id: 'loop_1', type: 'loop', position: [-0.5, 0.6, 0], rotationYDeg: 0, params: { radius: 0.5 } },
+    { id: 'rail_3', type: 'rail', position: [0, 0.85, 0.5], rotationYDeg: 0, params: { lengthMeters: 1, slopeMeters: -0.1 } },
+    { id: 'curve_1', type: 'curve', position: [0, 0.65, 1.5], rotationYDeg: 0, params: { arc: 1 } },
+    { id: 'rail_4', type: 'rail', position: [0.719669915, 0.65, 2.237436867], rotationYDeg: 0, params: { lengthMeters: 1, slopeMeters: 0.1, lean: 1 } },
+    { id: 'curve_2', type: 'curve', position: [1.43933983, 0.55, 2.974873734], rotationYDeg: 90, params: { arc: 2, turn: -1 } },
+    { id: 'goal_1', type: 'goal', position: [1.5, 0, 4], rotationYDeg: 0 },
   ],
 };

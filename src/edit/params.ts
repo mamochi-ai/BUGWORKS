@@ -3,10 +3,11 @@ import { launcherParams } from '../sim/launcher';
 import { springParams } from '../sim/spring';
 import { platformHeight } from '../sim/goal';
 import { curveShape } from '../sim/curveGeometry';
-import { railLength, railSlope } from '../sim/railGeometry';
+import { railLean, railLength, railSlope } from '../sim/railGeometry';
 import { gearRatio, shaftLength } from '../sim/drive';
 import { magnetParams } from '../sim/magnet';
 import { rotatorParams } from '../sim/rotator';
+import { loopRadius } from '../sim/loopGeometry';
 
 /**
  * 画面で変えられる装置の設定（範囲と刻みは試作値, DECISIONS.md D-22）。
@@ -25,7 +26,7 @@ export interface ParamSpec {
 
 export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
   rail: [
-    { key: 'slopeMeters', label: '下る高さ（坂のきつさ）', unit: 'm', min: 0, max: 0.6, step: 0.1 },
+    { key: 'slopeMeters', label: '下る高さ（マイナスは上り坂）', unit: 'm', min: -0.4, max: 0.6, step: 0.1 },
     {
       key: 'lengthMeters',
       label: '長さ',
@@ -37,6 +38,19 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
         { value: 1, label: '1m' },
         { value: 2, label: '2m' },
         { value: 3, label: '3m' },
+      ],
+    },
+    {
+      key: 'lean',
+      label: '向き',
+      unit: '',
+      min: -1,
+      max: 1,
+      step: 1,
+      choices: [
+        { value: -1, label: '斜め右（45°）' },
+        { value: 0, label: 'まっすぐ' },
+        { value: 1, label: '斜め左（45°）' },
       ],
     },
   ],
@@ -110,6 +124,20 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
   ],
   shaft: [{ key: 'lengthMeters', label: '長さ', unit: 'm', min: 0.5, max: 3, step: 0.5 }],
   switch: [],
+  loop: [
+    {
+      key: 'radius',
+      label: '大きさ',
+      unit: 'm',
+      min: 0.35,
+      max: 0.5,
+      step: 0.15,
+      choices: [
+        { value: 0.35, label: '小（半径0.35m）' },
+        { value: 0.5, label: '大（半径0.5m）' },
+      ],
+    },
+  ],
   rotator: [
     { key: 'degreesPerSecond', label: '回る速さ', unit: '°/秒', min: 15, max: 90, step: 15 },
     {
@@ -162,7 +190,7 @@ export function normalizeParam(spec: ParamSpec, value: number): number {
 export function paramValue(device: PlacedDevice, key: string): number {
   const all: Record<string, number> =
     device.type === 'rail'
-      ? { slopeMeters: railSlope(device), lengthMeters: railLength(device) }
+      ? { slopeMeters: railSlope(device), lengthMeters: railLength(device), lean: railLean(device) }
       : device.type === 'launcher'
       ? { ...launcherParams(device) }
       : device.type === 'spring'
@@ -179,7 +207,9 @@ export function paramValue(device: PlacedDevice, key: string): number {
                   ? { ...magnetParams(device) }
                   : device.type === 'rotator'
                     ? { ...rotatorParams(device) }
-                    : {};
+                    : device.type === 'loop'
+                      ? { radius: loopRadius(device) }
+                      : {};
   return all[key] ?? NaN;
 }
 
