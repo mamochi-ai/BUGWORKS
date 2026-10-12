@@ -4,6 +4,7 @@ import { springParams } from '../sim/spring';
 import { platformHeight } from '../sim/goal';
 import { curveTurn } from '../sim/curveGeometry';
 import { gearRatio, shaftLength } from '../sim/drive';
+import { magnetParams } from '../sim/magnet';
 
 /**
  * 画面で変えられる装置の設定（範囲と刻みは試作値, DECISIONS.md D-22）。
@@ -66,6 +67,22 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
     },
   ],
   shaft: [{ key: 'lengthMeters', label: '長さ', unit: 'm', min: 0.5, max: 3, step: 0.5 }],
+  magnet: [
+    {
+      key: 'mode',
+      label: '向き',
+      unit: '',
+      min: -1,
+      max: 1,
+      step: 2,
+      choices: [
+        { value: 1, label: '引きよせる' },
+        { value: -1, label: 'しりぞける' },
+      ],
+    },
+    { key: 'maxForceNewton', label: '強さ（いちばん近いとき）', unit: 'N', min: 5, max: 40, step: 5 },
+    { key: 'radius', label: '届く距離', unit: 'm', min: 0.5, max: 3, step: 0.25 },
+  ],
 };
 
 export function findSpec(type: DeviceType, key: string): ParamSpec | undefined {
@@ -98,7 +115,9 @@ export function paramValue(device: PlacedDevice, key: string): number {
               ? { gearRatio: gearRatio(device) }
               : device.type === 'shaft'
                 ? { lengthMeters: shaftLength(device) }
-                : {};
+                : device.type === 'magnet'
+                  ? { ...magnetParams(device) }
+                  : {};
   return all[key] ?? NaN;
 }
 
@@ -115,6 +134,7 @@ export function stepParam(spec: ParamSpec, value: number, dir: 1 | -1): number {
 export function formatParam(spec: ParamSpec, value: number): string {
   const choice = spec.choices?.find((c) => c.value === value);
   if (choice) return choice.label;
-  const digits = spec.step < 1 ? 1 : 0;
+  // 刻みの小数の桁数で表示する（0.25 刻みなら 2 桁）
+  const digits = (String(spec.step).split('.')[1] ?? '').length;
   return `${value.toFixed(digits)}${spec.unit}`;
 }

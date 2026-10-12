@@ -8,6 +8,7 @@ import { inGoal, platformHeight } from './goal';
 import { curveMesh, curveTurn } from './curveGeometry';
 import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
+import { magnetAccel } from './magnet';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -131,6 +132,7 @@ export class Simulation {
   private paddles: (PaddleState & { device: PlacedDevice; inside: Set<number> })[] = [];
   private bridges: (BridgeState & { device: PlacedDevice; deck: RigidBody; hinge: Vec3; deckCenter: Vec3; deckPitch: number; yaw: number })[] = [];
   private shaftLinks: ShaftLink[] = [];
+  private magnets: PlacedDevice[] = [];
   private nextBallId = 0;
   private _tick = 0;
   private _lostBalls = 0;
@@ -212,6 +214,7 @@ export class Simulation {
     }
     for (const sp of this.springs) this.stepSpring(sp);
     this.stepDrive();
+    this.stepMagnets();
     this.world.step();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
@@ -514,6 +517,7 @@ export class Simulation {
     this.springs = [];
     this.goals = [];
     this.paddles = [];
+    this.magnets = this._layout.devices.filter((d) => d.type === 'magnet');
     this.bridges = [];
     this.shaftLinks = findConnections(this._layout.devices)
       .filter((c) => c.type === 'shaft')
@@ -537,7 +541,7 @@ export class Simulation {
     for (const d of this._layout.devices) {
       if (d.type === 'paddle') this.paddles.push({ deviceId: d.id, device: d, angle: 0, target: 0, passes: 0, inside: new Set() });
       if (d.type === 'bridge') this.addBridge(d);
-      if (d.type === 'gearbox' || d.type === 'shaft') this.addDriveBox(d);
+      if (d.type === 'gearbox' || d.type === 'shaft' || d.type === 'magnet') this.addDriveBox(d);
     }
 
     for (const d of this._layout.devices) {
@@ -648,7 +652,28 @@ export class Simulation {
     this.bridges.push(br);
   }
 
-  /** 歯車装置・軸：床に置く箱の当たり判定 */
+  /** 磁石：範囲内の鉄球に力を加える（配置順・球の順に固定。決定論のため力は速度の変化として直接加える） */
+  private stepMagnets(): void {
+    if (this.magnets.length === 0) return;
+    for (const b of this.balls) {
+      const t = b.body.translation();
+      let ax = 0;
+      let ay = 0;
+      let az = 0;
+      for (const m of this.magnets) {
+        const a = magnetAccel(m, [t.x, t.y, t.z]);
+        if (!a) continue;
+        ax += a[0];
+        ay += a[1];
+        az += a[2];
+      }
+      if (ax === 0 && ay === 0 && az === 0) continue;
+      const v = b.body.linvel();
+      b.body.setLinvel({ x: v.x + ax * PHYSICS_DT, y: v.y + ay * PHYSICS_DT, z: v.z + az * PHYSICS_DT }, true);
+    }
+  }
+
+  /** 歯車装置・軸・磁石：床（台）に置く箱の当たり判定 */
   private addDriveBox(d: PlacedDevice): void {
     const R = this.R;
     const f = footprint(d);
