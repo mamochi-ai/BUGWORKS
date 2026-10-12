@@ -137,6 +137,8 @@ function wallTexture(): THREE.CanvasTexture {
 
 export interface LabEnvironment {
   root: THREE.Group;
+  /** 装置を置ける範囲のふちの注意帯（部屋のモデルに差し替えても残す） */
+  hazard: THREE.Group;
   /** 床の箱・壁の箱に使う材質（当たり判定の箱の見た目） */
   materials: { floor: THREE.Material; wall: THREE.Material; curb: THREE.Material };
 }
@@ -178,6 +180,8 @@ export function buildLabEnvironment(boxes: readonly LabBox[]): LabEnvironment {
 
   // ---- 装置を置ける範囲のふち：注意帯（ステージでも自由研究でも同じ範囲）
   const hz = hazardTexture();
+  const hazard = new THREE.Group();
+  hazard.name = 'placement_edge';
   const edge = PLACEMENT.bounds.max;
   const band = 0.16;
   for (const [cx, cz, len, ry] of [
@@ -189,8 +193,11 @@ export function buildLabEnvironment(boxes: readonly LabBox[]): LabEnvironment {
     const t = hz.clone();
     t.needsUpdate = true;
     t.repeat.set(len / (band * 4), 1);
-    const strip = add(new THREE.PlaneGeometry(len, band), std(0xffffff, 0.7, 0.2, { map: t }), cx, 0.003, cz);
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(len, band), std(0xffffff, 0.7, 0.2, { map: t }));
+    strip.position.set(cx, 0.003, cz);
     strip.rotation.set(-Math.PI / 2, 0, ry);
+    strip.receiveShadow = true;
+    hazard.add(strip);
   }
 
   // ---- 床の外の暗い土間（床の端が宙に浮いて見えないように。見た目だけ。床の下には描かない）
@@ -309,6 +316,7 @@ export function buildLabEnvironment(boxes: readonly LabBox[]): LabEnvironment {
   const wallMap = wallTexture();
   return {
     root: mergeByMaterial(root),
+    hazard,
     materials: {
       floor: std(0xffffff, 0.82, 0.35, { map: floorMap }),
       wall: std(0xffffff, 0.85, 0.25, { map: wallMap }),
