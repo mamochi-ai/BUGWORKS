@@ -186,3 +186,10 @@ html, body {
   .stage-panel { width: auto; left: 192px; top: calc(max(12px, env(safe-area-inset-top)) + 56px); }
   .stage-head button span { display: none; }
 }
+
+/* スイッチの配線 */
+.edit .wires .wire-list { margin: 0; font-size: 12.5px; color: var(--text); white-space: pre-line; line-height: 1.5; }
+.edit .wires button[aria-pressed='true'] { border-color: var(--cyan); color: var(--cyan); }
+/* 見本のボタンは名前が長いので、小さめの文字で折り返す */
+.edit .samples .row button { font-size: 12px; line-height: 1.25; }
+.edit .samples .row button span, .edit .samples .row button { white-space: normal; }

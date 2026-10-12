@@ -12,6 +12,7 @@ import { SpringModelFactory } from './SpringModel';
 import { GoalModelFactory } from './GoalModels';
 import { DriveModelFactory } from './DriveModels';
 import { MagnetModelFactory } from './MagnetModel';
+import { SwitchModelFactory } from './SwitchModel';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
@@ -31,6 +32,9 @@ export class DeviceLayer {
   private readonly goalFactory = new GoalModelFactory(this.mats);
   private readonly driveFactory = new DriveModelFactory(this.mats, this.railFactory);
   private readonly magnetFactory = new MagnetModelFactory(this.mats);
+  private readonly switchFactory = new SwitchModelFactory(this.mats, this.railFactory);
+  /** スイッチの配線のケーブル */
+  private readonly cables = new THREE.Group();
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
   private readonly supports = new THREE.Group();
   private readonly markers = new THREE.Group();
@@ -51,7 +55,8 @@ export class DeviceLayer {
     this.outline = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: COLOR.selected, depthTest: false, transparent: true }));
     this.outline.renderOrder = 10;
     this.outline.visible = false;
-    this.root.add(this.supports, this.markers, this.outline);
+    this.cables.name = 'signal_cables';
+    this.root.add(this.supports, this.markers, this.outline, this.cables);
   }
 
   /** レイキャスト対象（userData.deviceId を持つグループ） */
@@ -93,6 +98,8 @@ export class DeviceLayer {
                         ? this.driveFactory.createShaft(d)
                         : d.type === 'magnet'
                           ? this.magnetFactory.create(d)
+                          : d.type === 'switch'
+                            ? this.switchFactory.create(d)
                           : this.driveFactory.createBridge(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
@@ -106,7 +113,35 @@ export class DeviceLayer {
     }
     this.rebuildSupports(devices);
     this.rebuildMarkers(devices, connections, null);
+    this.rebuildCables(devices);
     this.updateOutline(this.devices.find((d) => d.id === selectedId) ?? null, true);
+  }
+
+  private rebuildCables(devices: readonly PlacedDevice[]): void {
+    for (const c of [...this.cables.children]) {
+      if (c instanceof THREE.Mesh) c.geometry.dispose();
+      this.cables.remove(c);
+    }
+    const byId = new Map(devices.map((d) => [d.id, d]));
+    for (const s of devices) {
+      if (s.type !== 'switch') continue;
+      for (const t of s.signalTargets ?? []) {
+        const target = byId.get(t);
+        const cable = target ? this.switchFactory.createCable(s, target) : null;
+        if (cable) this.cables.add(cable);
+      }
+    }
+  }
+
+  /** スイッチの ON/OFF（レバー・灯り・札・ケーブル） */
+  setSwitchStates(states: ReadonlyMap<string, boolean>): void {
+    for (const [id, on] of states) {
+      const r = this.rails.get(id);
+      if (r) this.switchFactory.setOn(r.group, on);
+    }
+    for (const c of this.cables.children) {
+      if (c instanceof THREE.Mesh) this.switchFactory.setCableOn(c, states.get(c.userData.switchId) ?? false);
+    }
   }
 
   setSelected(id: string | null): void {
@@ -159,7 +194,7 @@ export class DeviceLayer {
     // 発射機の出口は発射機自身が支えるので、そこに支柱は立てない
     const seen = new Set<string>(devices.filter((d) => d.type === 'launcher').map((d) => key(portWorldPosition(d, 'ball_out'))));
     for (const d of devices) {
-      if (d.type !== 'rail' && d.type !== 'curve' && d.type !== 'paddle') continue;
+      if (d.type !== 'rail' && d.type !== 'curve' && d.type !== 'paddle' && d.type !== 'switch') continue;
       // カーブは弧の中央にも支柱を立てる
       const extra: Vec3[] = d.type === 'curve' ? [curveToWorld(d, curveFrame(curveTurn(d), 0.5).pos)] : [];
       for (const p of [...['ball_in', 'ball_out'].map((id) => portWorldPosition(d, id)), ...extra]) {

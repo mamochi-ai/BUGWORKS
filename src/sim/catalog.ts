@@ -94,6 +94,20 @@ const PROTOTYPE_DEVICES: DeviceDef[] = [
     prototypeOnly: true,
   },
   {
+    // スイッチ：長さ1mのレールにレバー。球が通るたびに ON/OFF が切り替わり、配線した装置へ信号を送る（switch.ts, D-30）
+    id: 'switch',
+    name: 'スイッチ',
+    size: [1, 0.9, 1],
+    ports: [
+      { id: 'ball_in', type: 'ball', position: [0, 0.35, -0.5], direction: [0, 0, -1] },
+      { id: 'ball_out', type: 'ball', position: [0, 0.25, 0.5], direction: [0, 0, 1] },
+      { id: 'signal_out', type: 'signal', position: [0.45, 0.3, 0], direction: [1, 0, 0] },
+    ],
+    params: {},
+    movingParts: ['lever'],
+    prototypeOnly: true,
+  },
+  {
     // 軸：長さは設定で変える（ポートの z は長さの半分）
     id: 'shaft',
     name: '軸',

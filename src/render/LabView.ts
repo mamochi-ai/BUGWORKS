@@ -61,6 +61,7 @@ export class LabView {
   render(camera: THREE.Camera, alpha: number): void {
     this.devices.setLauncherCharge(launcherCharge(this.sim));
     this.devices.setDriveAngles(this.sim.driveAngles());
+    this.devices.setSwitchStates(this.sim.switchStates());
     this.devices.setSpringCompression(new Map(this.sim.springCompressions().map((s) => [s.deviceId, s.offset])));
     // 球が入ったゴールは 0.6 秒かけて光が引く
     const flashTicks = 0.6 * PHYSICS_HZ;

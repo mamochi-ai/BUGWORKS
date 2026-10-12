@@ -15,9 +15,11 @@ export interface PlacedDevice {
   rotationYDeg: number;
   /** devices.v0.1.json の params を上書きする値（省略時は JSON の既定値） */
   params?: Record<string, number>;
+  /** スイッチの配線先（信号を送る装置のID。発射機・磁石だけ。D-30） */
+  signalTargets?: string[];
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet' | 'switch';
 
 export interface SliceLayout {
   seed: number;
@@ -85,5 +87,25 @@ export const MAGNET_SAMPLE_LAYOUT: SliceLayout = {
     { id: 'rail_3', type: 'rail', position: [0, 0, 2], rotationYDeg: 0 },
     { id: 'magnet_1', type: 'magnet', position: [1.75, 0, 4.5], rotationYDeg: 270, params: { mode: 1, maxForceNewton: 40, radius: 2.5 } },
     { id: 'goal_1', type: 'goal', position: [1, 0, 4.5], rotationYDeg: 0 },
+  ],
+};
+
+/**
+ * 見本「スイッチで発射」（DECISIONS.md D-30）：左の発射機（3秒ごと）の球がスイッチを通るたびに ON/OFF が切り替わる。
+ * スイッチは右の発射機に配線してあり、右の発射機は ON の間だけ 1 秒ごとに撃つ（3発撃って止まり、次の球でまた撃つ）。
+ */
+export const SWITCH_SAMPLE_LAYOUT: SliceLayout = {
+  seed: 404,
+  devices: [
+    { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0, params: { cooldownSeconds: 3 } },
+    { id: 'rail_1', type: 'rail', position: [0, 0.4, -2], rotationYDeg: 0 },
+    { id: 'rail_2', type: 'rail', position: [0, 0.2, 0], rotationYDeg: 0 },
+    { id: 'switch_1', type: 'switch', position: [0, 0, 1.5], rotationYDeg: 0, signalTargets: ['launcher_2'] },
+    { id: 'goal_1', type: 'goal', position: [0, 0, 2.75], rotationYDeg: 0 },
+    { id: 'launcher_2', type: 'launcher', position: [2.5, 0, -3.65], rotationYDeg: 0 },
+    { id: 'rail_3', type: 'rail', position: [2.5, 0.4, -2], rotationYDeg: 0 },
+    { id: 'rail_4', type: 'rail', position: [2.5, 0.2, 0], rotationYDeg: 0 },
+    { id: 'rail_5', type: 'rail', position: [2.5, 0, 2], rotationYDeg: 0 },
+    { id: 'goal_2', type: 'goal', position: [2.5, 0, 3.75], rotationYDeg: 0 },
   ],
 };
