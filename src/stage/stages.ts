@@ -108,6 +108,18 @@ export const STAGES: StageDef[] = [
   },
 ];
 
+/**
+ * 遊べるか（アンロック順, DECISIONS.md D-27：順番に解放 — 2026-10-11 ユーザー判断）。
+ * 最初のステージは最初から遊べる。それ以降は、それより前のステージをすべてクリアすると遊べる。
+ */
+export function unlockState(id: string, cleared: readonly string[]): { unlocked: boolean; reason?: string } {
+  const i = STAGES.findIndex((s) => s.id === id);
+  if (i < 0) return { unlocked: false, reason: 'このステージはありません' };
+  // 前のステージがすべてクリア済みなら遊べる（記録が欠けていたら、最初に欠けているステージを案内する）
+  const missing = STAGES.slice(0, i).find((s) => !cleared.includes(s.id));
+  return missing ? { unlocked: false, reason: `${missing.id}「${missing.name}」をクリアすると遊べます` } : { unlocked: true };
+}
+
 export function findStage(id: string): StageDef | undefined {
   return STAGES.find((s) => s.id === id);
 }

@@ -126,13 +126,17 @@ export class StageUi {
   private renderList(): void {
     this.el.list.innerHTML = STAGES.map((s) => {
       const cleared = this.stage.isCleared(s.id);
-      const state = s.comingSoon ? '準備中' : cleared ? '✓ クリア済み' : '未クリア';
+      const lock = this.stage.unlock(s.id);
+      // 準備中を先に判定（機能が無いので、前をクリアしても遊べない）
+      const kind = s.comingSoon ? 'soon' : !lock.unlocked ? 'locked' : cleared ? 'cleared' : 'open';
+      const state = { soon: '準備中', locked: '🔒 ロック中', cleared: '✓ クリア済み', open: '未クリア' }[kind];
+      const note = s.comingSoon ?? lock.reason ?? s.objective;
       return `
         <li>
-          <button type="button" data-s="stage" data-id="${s.id}" ${s.comingSoon ? 'disabled' : ''} aria-label="ステージ ${s.id} ${s.name}（${state}）">
+          <button type="button" data-s="stage" data-id="${s.id}" ${kind === 'soon' || kind === 'locked' ? 'disabled' : ''} aria-label="ステージ ${s.id} ${s.name}（${state}。${note}）">
             <span class="sid">${s.id}</span>
-            <span class="sname">${s.name}<small>${s.comingSoon ?? s.objective}</small></span>
-            <span class="sstate" data-state="${s.comingSoon ? 'soon' : cleared ? 'cleared' : 'open'}">${state}</span>
+            <span class="sname">${s.name}<small>${note}</small></span>
+            <span class="sstate" data-state="${kind}">${state}</span>
           </button>
         </li>`;
     }).join('');

@@ -4,12 +4,13 @@ const out = process.argv[2] || '.';
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
   const ctx = await b.newContext({ ...devices['iPad Pro 11 landscape'] });
-  const p = await ctx.newPage(); const errs = [];
+  const p = await ctx.newPage(); const errs = []; p.setDefaultTimeout(120000); // ソフトウェア描画では1コマが重いので待ち時間を長めに
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type()==='error' && errs.push(m.text()));
   await p.goto(process.env.BUGWORKS_URL || 'http://localhost:5173/'); await p.waitForFunction(() => window.__bugworks, null, { timeout: 60000 });
   await p.evaluate(() => localStorage.clear());
   await p.waitForTimeout(400);
   await p.screenshot({ path: out + '/stage_select.png' });
+  console.log('locked at start:', await p.evaluate(() => [...document.querySelectorAll('.stage-list button')].map(b => `${b.dataset.id}:${b.disabled ? 'x' : 'o'}`).join(' ')));
   await p.getByRole('button', { name: /ステージ 1-1/ }).tap(); await p.waitForTimeout(400);
   const palette = await p.evaluate(() => [...document.querySelectorAll('.palette button')].filter(x => !x.hidden).map(x => x.textContent.trim()));
   console.log('palette in 1-1:', palette);
@@ -36,6 +37,7 @@ const out = process.argv[2] || '.';
   console.log('now:', await p.evaluate(() => window.__bugworks.stage.current.id));
   await p.screenshot({ path: out + '/stage_next.png' });
   await p.getByRole('button', { name: 'ステージ選択を開く' }).tap(); await p.waitForTimeout(300);
+  console.log('locked after 1-1:', await p.evaluate(() => [...document.querySelectorAll('.stage-list button')].map(b => `${b.dataset.id}:${b.disabled ? 'x' : 'o'}`).join(' ')));
   await p.screenshot({ path: out + '/stage_select_after.png' });
   console.log('errors:', errs);
   await b.close();

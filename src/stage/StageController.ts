@@ -3,7 +3,7 @@ import type { SliceLayout } from '../sim/layout';
 import type { Simulation } from '../sim/Simulation';
 import type { SimulationController } from '../sim/SimulationController';
 import { loadProgress, saveProgress, type Progress } from './progress';
-import { findStage, type StageDef, type StageEvent } from './stages';
+import { STAGES, findStage, unlockState, type StageDef, type StageEvent } from './stages';
 
 type Change = 'stage' | 'clear' | 'events';
 
@@ -40,6 +40,11 @@ export class StageController {
     return this.progress.cleared.includes(id);
   }
 
+  /** 遊べるか（ロック中なら理由つき） */
+  unlock(id: string): { unlocked: boolean; reason?: string } {
+    return unlockState(id, this.progress.cleared);
+  }
+
   /** 今の再生で起きた出来事 */
   events(): Record<StageEvent, boolean> {
     return this.sim.events();
@@ -47,7 +52,7 @@ export class StageController {
 
   start(id: string): boolean {
     const st = findStage(id);
-    if (!st || st.comingSoon) return false;
+    if (!st || st.comingSoon || !this.unlock(id).unlocked) return false;
     this.ctl.ensureEditable();
     this._current = st;
     this.clearedThisRun = false;
@@ -66,10 +71,9 @@ export class StageController {
   /** 次に遊べるステージ */
   next(): StageDef | null {
     if (!this._current) return null;
-    const ids = ['1-1', '1-2', '1-3', '1-4', '1-5'];
-    const i = ids.indexOf(this._current.id);
-    const n = i >= 0 ? findStage(ids[i + 1] ?? '') : undefined;
-    return n && !n.comingSoon ? n : null;
+    const i = STAGES.findIndex((s) => s.id === this._current!.id);
+    const n = STAGES[i + 1];
+    return n && !n.comingSoon && this.unlock(n.id).unlocked ? n : null;
   }
 
   /** 描画フレームごとに呼ぶ */

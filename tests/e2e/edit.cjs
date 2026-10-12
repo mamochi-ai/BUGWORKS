@@ -3,19 +3,22 @@ const { chromium, devices } = require(process.env.PLAYWRIGHT_MODULE || 'playwrig
 const out = process.argv[2] || '.';
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
-  const ctx = await b.newContext({ ...devices['iPad Pro 11 landscape'] });
-  const p = await ctx.newPage(); const errs = [];
+  // 画面の大きさとタッチは iPad のまま、画素密度だけ 1 にする（ソフトウェア描画の負荷を 1/4 に）
+  const ctx = await b.newContext({ ...devices['iPad Pro 11 landscape'], deviceScaleFactor: 1 });
+  const p = await ctx.newPage(); const errs = []; p.setDefaultTimeout(120000); // ソフトウェア描画では1コマが重いので待ち時間を長めに
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type()==='error' && errs.push(m.text()));
   await p.goto(process.env.BUGWORKS_URL || 'http://localhost:5173/'); await p.waitForFunction(() => window.__bugworks, null, { timeout: 60000 });
   await p.getByRole('button', { name: '自由研究' }).tap(); // 起動時のステージ選択を閉じる
   await p.waitForTimeout(500);
   const cdp = await ctx.newCDPSession(p);
   const touch = async (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x,y],i)=>({x,y,id:i})) });
+  // 描画が2コマ進むまで待つ（ソフトウェア描画では1コマが数秒かかり、部品の当たり位置の更新が遅れるため）
+  const settle = async () => { await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); await p.waitForTimeout(300); };
   const drag = async (from, to, steps = 12) => {
     await touch('touchStart', [from]);
     for (let i = 1; i <= steps; i++) await touch('touchMove', [[from[0] + (to[0]-from[0])*i/steps, from[1] + (to[1]-from[1])*i/steps]]);
     await touch('touchEnd', []);
-    await p.waitForTimeout(300);
+    await settle();
   };
   // ワールド座標→画面座標
   const screen = (v) => p.evaluate((v) => { const { rig } = window.__bugworks; const c = rig.camera; c.updateMatrixWorld(); const V = c.position.constructor; const w = new V(...v).project(c); const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left + (w.x+1)/2*r.width, r.top + (1-w.y)/2*r.height]; }, v);
@@ -23,17 +26,17 @@ const out = process.argv[2] || '.';
   const fix = (pos, tgt) => p.evaluate(([pos,tgt]) => { const r = window.__bugworks.rig; r.controls.enableDamping = false; r.camera.position.set(...pos); r.controls.target.set(...tgt); r.controls.update(); }, [pos,tgt]);
 
   await fix([7, 9, 3], [1.5, 0, -1]);
-  await p.waitForTimeout(300);
+  await settle();
   console.log('0 initial', await state());
 
   // 1) rail_3 をタップして削除し、パレットからレールを追加
   const r3pt = await screen([0, 0.9, 2]);
-  await touch('touchStart', [r3pt]); await touch('touchEnd', []); await p.waitForTimeout(300);
+  await touch('touchStart', [r3pt]); await touch('touchEnd', []); await settle();
   await p.getByRole('button', { name: '削除' }).tap();
-  await p.waitForTimeout(300);
+  await settle();
   console.log('1a deleted', (await state()).msg);
   await p.getByRole('button', { name: /^レールを追加/ }).tap();
-  await p.waitForTimeout(300);
+  await settle();
   let s = await state(); console.log('1 added', s);
   const newId = s.sel;
   const pos = await p.evaluate((id) => window.__bugworks.editor.devices.find(d => d.id === id).position, newId);
@@ -42,7 +45,7 @@ const out = process.argv[2] || '.';
   const camBefore = (await state()).cam;
   await drag([1050, 700], [1150, 700]); // 左のパネルと重ならない空き場所
   s = await state(); console.log('2 empty drag: camera moved', JSON.stringify(camBefore) !== JSON.stringify(s.cam), 'devices same', s.n);
-  await fix([7, 9, 3], [1.5, 0, -1]); await p.waitForTimeout(300);
+  await fix([7, 9, 3], [1.5, 0, -1]); await settle();
 
   // 3) 新しいレールを1本指でドラッグし、rail_2 の出口（z=1）の先へ → 吸着して接続
   const from = await screen([pos[0], pos[1] + 0.3, pos[2]]);
@@ -60,7 +63,7 @@ const out = process.argv[2] || '.';
 
   // 5) 実行中にレールに触れるとリセットされ編集できる。回転→元に戻す
   const r3 = await screen([0, 0.9, 2]);
-  await touch('touchStart', [r3]); await touch('touchEnd', []); await p.waitForTimeout(300);
+  await touch('touchStart', [r3]); await touch('touchEnd', []); await settle();
   s = await state(); console.log('5 tapped rail while running ->', s.state, s.sel);
   await p.getByRole('button', { name: '回転' }).tap(); await p.waitForTimeout(200);
   console.log('5b rotate', (await state()).msg);
@@ -68,7 +71,7 @@ const out = process.argv[2] || '.';
   console.log('5c undo', (await state()).msg);
 
   // 6) 置けない場所（他のレールに重ねる）→ 元に戻り理由表示
-  await fix([7, 9, 3], [1.5, 0, -1]); await p.waitForTimeout(300);
+  await fix([7, 9, 3], [1.5, 0, -1]); await settle();
   const r3b = await screen([0, 0.9, 2]);
   const r2 = await screen([0, 0.6, 0.2]);
   await drag(r3b, r2, 10);
