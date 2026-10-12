@@ -9,7 +9,7 @@ import type { DeviceType, PlacedDevice } from '../sim/layout';
  * - required：通常クリアに必要な出来事（ステージ資料の requiredEvents）。隠しバグは必要条件にしない
  * - solution：解き方の一例（自動テストで「解ける」ことを確かめるためだけに使い、画面には出さない）
  */
-export type StageEvent = 'ball_enter_goal' | 'spring_triggered' | 'paddle_turned' | 'bridge_connected' | 'switch_on' | 'blueprint_saved';
+export type StageEvent = 'ball_enter_goal' | 'spring_triggered' | 'paddle_turned' | 'bridge_connected' | 'switch_on' | 'all_goals' | 'blueprint_saved';
 
 /** 1回の再生ではなく、ステージの間ずっと覚えておく出来事（設計図の保存はリセットしてから行うため） */
 export const STICKY_EVENTS: readonly StageEvent[] = ['blueprint_saved'];
@@ -20,6 +20,7 @@ export const EVENT_TEXT: Record<StageEvent, string> = {
   paddle_turned: '球で羽根車を回す',
   bridge_connected: '可動橋をつなぐ',
   switch_on: 'スイッチを ON にする',
+  all_goals: 'すべてのゴールに球を入れる',
   blueprint_saved: '設計図を保存する（この端末かファイルへ）',
 };
 
@@ -40,6 +41,23 @@ export interface StageDef {
 /** 床置きの発射機と、0.2m ずつ下る直線レール（z=-2 / 0 / 2） */
 const launcher: PlacedDevice = { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0 };
 const rail = (id: string, y: number, z: number): PlacedDevice => ({ id, type: 'rail', position: [0, y, z], rotationYDeg: 0 });
+/**
+ * 羽根車 → 歯車装置（固定・2倍）→ ［軸 1.5m］→ 遠くの可動橋 → ゴール（ステージ3用）。
+ * 1-4 より可動橋が遠く、間に 1m のレールがある（全体を 0.5m 手前にずらし、可動橋の先は 1-4 と同じ台の上のゴール）。
+ */
+const gearChain = (): PlacedDevice[] => [
+  { ...launcher, position: [0, 0.6, -4.15] },
+  rail('rail_1', 1.0, -2.5),
+  { id: 'paddle_1', type: 'paddle', position: [0, 0.8, -1], rotationYDeg: 0 },
+  rail('rail_2', 0.7, 0.5),
+  { id: 'rail_3', type: 'rail', position: [0, 0.6, 2], rotationYDeg: 0, params: { lengthMeters: 1, slopeMeters: 0.1 } },
+  { id: 'bridge_1', type: 'bridge', position: [0, 0.4, 3.5], rotationYDeg: 0 },
+  { id: 'gearbox_1', type: 'gearbox', position: [0.75, 0, 0.25], rotationYDeg: 270, params: { gearRatio: 2 } },
+  { id: 'platform_1', type: 'platform', position: [0, 0, 4.8], rotationYDeg: 0, params: { heightMeters: 0.4 } },
+  { id: 'goal_1', type: 'goal', position: [0, 0.4, 5], rotationYDeg: 0 },
+];
+/** 床の発射機とレール（rail_1 の出口：z=−1, 高さ0.55m）。その先 z=−0.4 に回転台を置ける */
+const turnBase = (): PlacedDevice[] => [launcher, rail('rail_1', 0.4, -2)];
 /** 高い所から始まる発射機とレール3本（1-2 と同じ。rail_3 の出口：z=3, 高さ0.75m） */
 const highChain = (): PlacedDevice[] => [{ ...launcher, position: [0, 0.6, -3.65] }, rail('rail_1', 1.0, -2), rail('rail_2', 0.8, 0), rail('rail_3', 0.6, 2)];
 
@@ -179,6 +197,68 @@ export const STAGES: StageDef[] = [
     inventory: { rail: 1, spring: 1 },
     required: ['spring_triggered', 'ball_enter_goal'],
     solution: [rail('rail_2', 0.8, 0), { id: 'spring_1', type: 'spring', position: [0, 0, 3.5], rotationYDeg: 0, params: { tiltDegrees: 15, launchSpeed: 6 } }],
+  },
+  // ---- ステージ3「まわる」（歯車・回転軸・伝達、回転台。ステージ資料 v1.0 は題だけなので、内容は試作で作った, D-39）
+  {
+    id: '3-1',
+    name: '軸をのばす',
+    objective: '歯車装置から可動橋まで、軸で回転を伝えよう',
+    hint: '長さ、合っていますか？',
+    devices: gearChain(),
+    inventory: { shaft: 1 },
+    required: ['bridge_connected', 'ball_enter_goal'],
+    solution: [{ id: 'shaft_1', type: 'shaft', position: [0.75, 0, 1.75], rotationYDeg: 0, params: { lengthMeters: 1.5 } }],
+  },
+  {
+    id: '3-2',
+    name: '回転台で曲げる',
+    objective: '回転台を置いて、左にあるゴールへ球を運ぼう',
+    hint: '止まって、回って、出ていきます。',
+    devices: [...turnBase(), { id: 'rail_2', type: 'rail', position: [1.6, 0.2, -0.4], rotationYDeg: 90 }, { id: 'goal_1', type: 'goal', position: [3.25, 0, -0.4], rotationYDeg: 0 }],
+    inventory: { rotator: 1 },
+    required: ['ball_enter_goal'],
+    solution: [{ id: 'rotator_1', type: 'rotator', position: [0, 0.2, -0.4], rotationYDeg: 0 }],
+  },
+  {
+    id: '3-3',
+    name: '右へ回す',
+    objective: '今度のゴールは右。回転台の回る向きを変えよう',
+    hint: '左回りだけが回転ではありません。',
+    devices: [...turnBase(), { id: 'rail_2', type: 'rail', position: [-1.6, 0.2, -0.4], rotationYDeg: 270 }, { id: 'goal_1', type: 'goal', position: [-3.25, 0, -0.4], rotationYDeg: 0 }],
+    inventory: { rotator: 1 },
+    required: ['ball_enter_goal'],
+    solution: [{ id: 'rotator_1', type: 'rotator', position: [0, 0.2, -0.4], rotationYDeg: 0, params: { direction: -1 } }],
+  },
+  {
+    id: '3-4',
+    name: '両方のゴールへ',
+    objective: '回転台は回り続けている。スイッチで止めて、前と左の両方のゴールに入れよう',
+    hint: '回すか、止めるか。それが問題です。',
+    devices: [
+      { ...launcher, params: { cooldownSeconds: 3 } },
+      { id: 'rail_1', type: 'rail', position: [0, 0.4, -1.5], rotationYDeg: 0, params: { lengthMeters: 1, slopeMeters: 0.1 } },
+      { id: 'rotator_1', type: 'rotator', position: [0, 0.2, -0.4], rotationYDeg: 0, params: { degreesPerSecond: 90 } },
+      { id: 'rail_2', type: 'rail', position: [0, 0.2, 1.2], rotationYDeg: 0 },
+      { id: 'goal_1', type: 'goal', position: [0, 0, 3], rotationYDeg: 0 },
+      { id: 'rail_3', type: 'rail', position: [1.6, 0.2, -0.4], rotationYDeg: 90 },
+      { id: 'goal_2', type: 'goal', position: [3.25, 0, -0.4], rotationYDeg: 0 },
+    ],
+    inventory: { switch: 1 },
+    required: ['all_goals'],
+    solution: [{ id: 'switch_1', type: 'switch', position: [0, 0.4, -2.5], rotationYDeg: 0, signalTargets: ['rotator_1'] }],
+  },
+  {
+    id: '3-5',
+    name: '動力を別の軸へ',
+    objective: '羽根車の回転を、歯車装置と軸で遠くの可動橋まで伝えよう',
+    hint: 'まわる研究の、総まとめです。',
+    devices: gearChain().filter((d) => d.type !== 'gearbox'),
+    inventory: { gearbox: 1, shaft: 1 },
+    required: ['paddle_turned', 'bridge_connected', 'ball_enter_goal'],
+    solution: [
+      { id: 'gearbox_1', type: 'gearbox', position: [0.75, 0, 0.25], rotationYDeg: 270, params: { gearRatio: 2 } },
+      { id: 'shaft_1', type: 'shaft', position: [0.75, 0, 1.75], rotationYDeg: 0, params: { lengthMeters: 1.5 } },
+    ],
   },
 ];
 

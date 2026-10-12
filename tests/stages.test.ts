@@ -168,3 +168,27 @@ describe('ステージ2：ひと工夫しないと解けない', () => {
     expect(r.events.ball_enter_goal).toBe(false);
   });
 });
+
+describe('ステージ3：ひと工夫しないと解けない', () => {
+  let R: Rapier;
+  beforeAll(async () => {
+    R = await loadRapier();
+  });
+  const st = (id: string) => STAGES.find((s) => s.id === id)!;
+  const withSolution = (id: string, change: (d: PlacedDevice) => PlacedDevice) => [...st(id).devices, ...st(id).solution.map(change)];
+
+  it('3-1：軸の長さが既定（1m）のままでは届かず、橋がつながらない', () => {
+    const devices = withSolution('3-1', (d) => (d.type === 'shaft' ? { ...d, params: {} } : d));
+    expect(play(R, devices, st('3-1'), 10).events.bridge_connected).toBe(false);
+  });
+
+  it('3-3：回転台が左回り（既定）のままでは右のゴールに入らない', () => {
+    const devices = withSolution('3-3', (d) => ({ ...d, params: {} }));
+    expect(play(R, devices, st('3-3'), 15).clearedAt).toBeNull();
+  });
+
+  it('3-4：スイッチを置いても回転台に配線しないと、前のゴールに入らない', () => {
+    const devices = withSolution('3-4', (d) => ({ ...d, signalTargets: [] }));
+    expect(play(R, devices, st('3-4'), 14).events.all_goals).toBe(false);
+  });
+});

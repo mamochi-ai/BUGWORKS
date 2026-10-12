@@ -411,13 +411,14 @@ export class Simulation {
    * ステージのクリア判定に使う出来事（この再生で一度でも起きたか）。
    * 判定は物理の状態から読むだけで、ゲームの進行には影響しない。
    */
-  events(): { ball_enter_goal: boolean; spring_triggered: boolean; paddle_turned: boolean; bridge_connected: boolean; switch_on: boolean } {
+  events(): { ball_enter_goal: boolean; spring_triggered: boolean; paddle_turned: boolean; bridge_connected: boolean; switch_on: boolean; all_goals: boolean } {
     return {
       ball_enter_goal: this.goalHits > 0,
       spring_triggered: this.springs.some((s) => s.launches > 0),
       paddle_turned: this.paddles.some((p) => p.passes > 0),
       bridge_connected: this.bridges.some((b) => b.angle === 0),
       switch_on: this.switches.some((s) => s.toggles > 0),
+      all_goals: this.goals.length > 0 && this.goals.every((g) => g.hits > 0),
     };
   }
 
