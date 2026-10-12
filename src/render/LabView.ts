@@ -7,6 +7,8 @@ import { BALL_RADIUS } from '../sim/railGeometry';
 import { PALETTE } from './palette';
 import { DeviceLayer } from './DeviceLayer';
 import { buildLabEnvironment } from './LabEnvironment';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { prepareRoom, roomUrl, updateWallVisibility, type PartKey } from './RoomModel';
 
 /**
  * 物理状態を読むだけの描画層。物理ワールドへは書き込まない。
@@ -22,6 +24,12 @@ export class LabView {
   private ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 16);
   private ballMat!: THREE.MeshStandardMaterial;
   private tmpQa = new THREE.Quaternion();
+  /** コードで作った床・壁・飾り（部屋のモデルを読み込めたら隠す） */
+  private codeLab: THREE.Object3D[] = [];
+  /** 部屋のモデルの部位（壁はカメラに合わせて隠す） */
+  private roomParts: Map<PartKey, THREE.Object3D> | null = null;
+  /** 部屋のモデルの読み込み状態（E2E・確認用） */
+  roomStatus: 'loading' | 'ready' | 'failed' = 'loading';
   private tmpQb = new THREE.Quaternion();
 
   constructor(
@@ -43,6 +51,7 @@ export class LabView {
     pmrem.dispose();
     this.addLights();
     this.addLab();
+    this.loadRoom();
     this.scene.add(this.devices.root);
     this.ballMat = this.makeBallMaterial();
   }
@@ -84,6 +93,7 @@ export class LabView {
       m.visible = !!f;
       if (f) this.applyBall(m, f.prev, f.curr, alpha);
     });
+    if (this.roomParts) updateWallVisibility(this.roomParts, camera.position);
     this.renderer.render(this.scene, camera);
   }
 
@@ -118,7 +128,8 @@ export class LabView {
   private addLab(): void {
     // 床の模様・壁の飾り・背景の小物（描画専用, D-28）
     const env = buildLabEnvironment(this.sim.labBoxes);
-    this.scene.add(env.root);
+    this.scene.add(env.root, env.hazard);
+    this.codeLab.push(env.root);
     const mats = env.materials;
     for (const box of this.sim.labBoxes) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(...box.size), mats[box.kind]);
@@ -128,6 +139,7 @@ export class LabView {
       mesh.castShadow = box.kind !== 'floor';
       mesh.name = box.id;
       this.scene.add(mesh);
+      this.codeLab.push(mesh);
       if (box.moduleId === 'wall_window') this.addWindowStrip(mesh, box.size);
     }
     // 0.25m 配置グリッド（devices.v0.1.json gridSize）と 4m モジュール境界
@@ -141,6 +153,29 @@ export class LabView {
     (module.material as THREE.Material).opacity = 0.35;
     (module.material as THREE.Material).transparent = true;
     this.scene.add(minor, module);
+  }
+
+  /**
+   * 部屋のモデル（D-36）を読み込み、読めたらコードで作った床・壁・飾りと差し替える。
+   * 読めなければ（オフライン・古い端末など）今の見た目のまま遊べる。
+   */
+  private loadRoom(): void {
+    const url = roomUrl();
+    new GLTFLoader().load(
+      url,
+      (gltf) => {
+        const room = prepareRoom(gltf.scene);
+        this.scene.add(room.root);
+        this.roomParts = room.parts;
+        for (const o of this.codeLab) o.visible = false;
+        this.roomStatus = 'ready';
+      },
+      undefined,
+      (err) => {
+        console.warn('部屋のモデルを読み込めませんでした（コードで作った見た目のまま続けます）', err);
+        this.roomStatus = 'failed';
+      },
+    );
   }
 
   private addWindowStrip(wall: THREE.Mesh, size: [number, number, number]): void {
