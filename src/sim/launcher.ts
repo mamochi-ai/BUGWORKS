@@ -11,6 +11,8 @@ export interface LauncherParams {
   launchSpeed: number;
   angleDegrees: number;
   cooldownSeconds: number;
+  /** 撃つ球の数（0 = いくつでも）。試作で追加（devices.v0.1.json に無い, DECISIONS.md D-41） */
+  shots: number;
 }
 
 /**
@@ -62,7 +64,8 @@ export interface LauncherPlan {
 export function launcherParams(device: PlacedDevice): LauncherParams {
   const def = getDeviceDef('launcher').params;
   const pick = (k: keyof LauncherParams) => device.params?.[k] ?? Number(def[k]);
-  return { launchSpeed: pick('launchSpeed'), angleDegrees: pick('angleDegrees'), cooldownSeconds: pick('cooldownSeconds') };
+  const shots = Math.max(0, Math.round(device.params?.shots ?? 0));
+  return { launchSpeed: pick('launchSpeed'), angleDegrees: pick('angleDegrees'), cooldownSeconds: pick('cooldownSeconds'), shots };
 }
 
 /** ローカル座標 → ワールド座標 */

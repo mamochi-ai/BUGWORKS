@@ -1,7 +1,7 @@
 import { CODEX } from '../bugs/codexData';
 import { loadCodex, recordDiscovery } from '../bugs/codex';
 import type { BugTrigger } from '../sim/bugs';
-import { S404_SVG } from './effects';
+import { S404_SVG, glitchFlash } from './effects';
 
 /**
  * 隠しバグの発見の演出と、バグ図鑑（D-37）。
@@ -14,7 +14,7 @@ export class BugUi {
   private toastTimer = 0;
   private onDiscover: ((id: string) => void) | null = null;
 
-  constructor(root: HTMLElement) {
+  constructor(private readonly root: HTMLElement) {
     const top = root.querySelector('.hud-top');
     const open = document.createElement('button');
     open.type = 'button';
@@ -81,6 +81,7 @@ export class BugUi {
       this.el.dTitle.textContent = `${entry.id}　${entry.name ?? ''}`;
       this.el.dDesc.textContent = entry.description ?? '';
       this.el.discover.hidden = false;
+      glitchFlash(this.root);
       this.syncButton();
       this.onDiscover?.(ev.id);
     } else {

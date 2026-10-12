@@ -40,3 +40,13 @@ export function celebrate(root: HTMLElement): void {
   root.appendChild(box);
   setTimeout(() => box.remove(), 1900);
 }
+
+/** 隠しバグの発見：画面全体が一瞬ノイズで乱れる（動きを減らす設定なら出さない） */
+export function glitchFlash(root: HTMLElement): void {
+  if (reducedMotion()) return;
+  const box = document.createElement('div');
+  box.className = 'glitch-flash';
+  box.setAttribute('aria-hidden', 'true');
+  root.appendChild(box);
+  setTimeout(() => box.remove(), 700);
+}

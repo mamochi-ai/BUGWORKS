@@ -58,6 +58,7 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
     { key: 'launchSpeed', label: '速さ', unit: 'm/s', min: 2, max: 8, step: 0.5 },
     { key: 'angleDegrees', label: '角度', unit: '°', min: 0, max: 60, step: 15 },
     { key: 'cooldownSeconds', label: '間隔', unit: '秒', min: 0.5, max: 3, step: 0.5 },
+    { key: 'shots', label: '撃つ数（0 はいくつでも）', unit: '個', min: 0, max: 16, step: 1 },
   ],
   spring: [
     { key: 'launchSpeed', label: '打ち上げの速さ', unit: 'm/s', min: 2, max: 8, step: 0.5 },

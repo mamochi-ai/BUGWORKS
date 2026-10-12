@@ -13,7 +13,7 @@ const lone = (params?: Record<string, number>): PlacedDevice => ({ id: 'L', type
 
 describe('発射機の形と発射の計画（物理なし）', () => {
   it('初期値は devices.v0.1.json（5m/s・45°・1秒）', () => {
-    expect(launcherParams(launcher)).toEqual({ launchSpeed: 5, angleDegrees: 45, cooldownSeconds: 1 });
+    expect(launcherParams(launcher)).toEqual({ launchSpeed: 5, angleDegrees: 45, cooldownSeconds: 1, shots: 0 });
     expect(planLauncher(launcher, base).periodTicks).toBe(PHYSICS_HZ);
   });
 
