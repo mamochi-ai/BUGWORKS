@@ -84,6 +84,8 @@ export class DeviceLayer {
           ? this.railFactory.createRail(buildRailTrack(d))
           : d.type === 'curve'
             ? this.railFactory.createCurve(d)
+            : d.type === 'loop'
+              ? this.railFactory.createLoop(d)
           : d.type === 'launcher'
             ? this.launcherFactory.create(d, launcherAngle)
             : d.type === 'spring'
@@ -206,7 +208,7 @@ export class DeviceLayer {
     // 発射機の出口は発射機自身が支えるので、そこに支柱は立てない
     const seen = new Set<string>(devices.filter((d) => d.type === 'launcher').map((d) => key(portWorldPosition(d, 'ball_out'))));
     for (const d of devices) {
-      if (d.type !== 'rail' && d.type !== 'curve' && d.type !== 'paddle' && d.type !== 'switch') continue;
+      if (d.type !== 'rail' && d.type !== 'curve' && d.type !== 'paddle' && d.type !== 'switch' && d.type !== 'loop') continue;
       // カーブは弧の中央にも支柱を立てる
       const extra: Vec3[] = d.type === 'curve' ? [curveToWorld(d, shapeFrame(curveShape(d), 0.5).pos)] : [];
       for (const p of [...['ball_in', 'ball_out'].map((id) => portWorldPosition(d, id)), ...extra]) {

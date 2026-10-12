@@ -2,8 +2,9 @@ import { getDeviceDef, type Vec3 } from '../sim/catalog';
 import type { PlacedDevice } from '../sim/layout';
 import { platformTop, platformHeight } from '../sim/goal';
 import { shaftLength } from '../sim/drive';
-import { localPort, portWorldPosition, railLength, rotateY } from '../sim/railGeometry';
+import { localPort, portWorldPosition, railLean, railLength, rotateY } from '../sim/railGeometry';
 import { curveShape, shapeBounds } from '../sim/curveGeometry';
+import { loopBounds, loopRadius } from '../sim/loopGeometry';
 
 /**
  * 置いた面の上に乗る装置（DECISIONS.md D-23）。高さは手で変えず、真下の台の上面（無ければ床）に合わせる。
@@ -101,11 +102,17 @@ export function snapToGrid(v: number): number {
 /** XZ 平面上の外形（90度単位の回転なので軸平行の箱で正確に表せる）と高さ範囲 */
 export function footprint(device: PlacedDevice): { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number } {
   const [sx, defY, defZ] = getDeviceDef(device.type).size;
-  const sy = device.type === 'platform' ? platformHeight(device) : defY;
+  const sy = device.type === 'platform' ? platformHeight(device) : device.type === 'loop' ? loopBounds(loopRadius(device)).height : defY;
   const sz = device.type === 'shaft' ? shaftLength(device) : device.type === 'rail' ? railLength(device) : defZ;
   // 装置ローカルの外形（カーブは形に合わせる。45°は原点に対して片寄る）
-  const local = device.type === 'curve' ? shapeBounds(curveShape(device)) : { minX: -sx / 2, maxX: sx / 2, minZ: -sz / 2, maxZ: sz / 2 };
-  const yaw = (Math.round(device.rotationYDeg / 90) * Math.PI) / 2;
+  const local =
+    device.type === 'curve'
+      ? shapeBounds(curveShape(device))
+      : device.type === 'loop'
+        ? loopBounds(loopRadius(device))
+        : { minX: -sx / 2, maxX: sx / 2, minZ: -sz / 2, maxZ: sz / 2 };
+  // 斜めのレールは 45°傾いた長方形を囲む箱にする
+  const yaw = (Math.round(device.rotationYDeg / 90) * Math.PI) / 2 + (device.type === 'rail' ? (railLean(device) * Math.PI) / 4 : 0);
   const [x, y, z] = device.position;
   let minX = Infinity;
   let maxX = -Infinity;

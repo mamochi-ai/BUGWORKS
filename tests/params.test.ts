@@ -15,7 +15,7 @@ describe('設定の定義', () => {
   it('発射機は 速さ・角度・間隔、バネは 打ち上げの速さ・天板の傾き、レールは 下る高さ・長さ', () => {
     expect(PARAM_SPECS.launcher.map((s) => s.key)).toEqual(['launchSpeed', 'angleDegrees', 'cooldownSeconds']);
     expect(PARAM_SPECS.spring.map((s) => s.key)).toEqual(['launchSpeed', 'tiltDegrees']);
-    expect(PARAM_SPECS.rail.map((s) => s.key)).toEqual(['slopeMeters', 'lengthMeters']);
+    expect(PARAM_SPECS.rail.map((s) => s.key)).toEqual(['slopeMeters', 'lengthMeters', 'lean']);
   });
 
   it('既定値はどれも範囲内で刻みに合っている', () => {

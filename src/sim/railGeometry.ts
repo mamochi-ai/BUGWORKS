@@ -53,8 +53,15 @@ export function localPort(device: PlacedDevice, portId: string): PortDef {
     return p;
   }
   const port = getPort(getDeviceDef(device.type), portId);
-  // 長さが変わる直線レール（入口・出口は長さの半分の位置）
-  if (device.type === 'rail') return { ...port, position: [port.position[0], port.position[1], Math.sign(port.position[2]) * (railLength(device) / 2)] };
+  // 長さが変わる直線レール（入口・出口は長さの半分の位置）。斜めのレールは 45°傾けた向きに置く（D-33）
+  if (device.type === 'rail') {
+    const sign = Math.sign(port.position[2]);
+    const lean = railLean(device);
+    const half = railLength(device) / 2;
+    if (lean === 0) return { ...port, position: [port.position[0], port.position[1], sign * half] };
+    const s = Math.SQRT1_2;
+    return { ...port, position: [r9(sign * lean * s * half), port.position[1], r9(sign * s * half)], direction: [r9(sign * lean * s), 0, r9(sign * s)] };
+  }
   // 長さが変わる軸
   if (device.type === 'shaft') return { ...port, position: [0, port.position[1], shaftPortZ(device, portId)] };
   // 羽根車・可動橋の軸は、装置の高さによらず床から一定の高さ
@@ -85,7 +92,18 @@ function railInY(device: PlacedDevice): number {
   return getPort(getDeviceDef('rail'), 'ball_out').position[1] + railSlope(device);
 }
 
-/** 直線レールの入口と出口の高低差（設定 slopeMeters） */
+/** 直線レールの向き：0 まっすぐ、+1 斜め左（+X 寄り）、−1 斜め右（D-33） */
+export function railLean(device: PlacedDevice): -1 | 0 | 1 {
+  const l = device.params?.lean ?? 0;
+  return l > 0 ? 1 : l < 0 ? -1 : 0;
+}
+
+function r9(v: number): number {
+  const r = Math.round(v * 1e9) / 1e9;
+  return Object.is(r, -0) ? 0 : r;
+}
+
+/** 直線レールの入口と出口の高低差（設定 slopeMeters。マイナスは上り坂） */
 export function railSlope(device: PlacedDevice): number {
   return device.params?.slopeMeters ?? Number(getDeviceDef('rail').params.slopeMeters);
 }
@@ -100,7 +118,8 @@ export function buildRailTrack(device: PlacedDevice): RailTrack {
   const dir = scale(d, 1 / length);
   const horiz = Math.hypot(d[0], d[2]);
   const pitch = Math.atan2(-d[1], horiz);
-  const yawRad = (device.rotationYDeg * Math.PI) / 180;
+  // 向きは入口→出口の水平の向きから求める（斜めのレールは装置の回転から 45°ずれる）
+  const yawRad = Math.atan2(d[0], d[2]);
   // side = 水平な横方向, normal = side × dir（上向き）
   const side: Vec3 = rotateY([1, 0, 0], yawRad);
   const normal: Vec3 = [

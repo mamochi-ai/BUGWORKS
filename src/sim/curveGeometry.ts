@@ -190,14 +190,25 @@ export function curveToWorld(device: PlacedDevice, local: Vec3): Vec3 {
  * 直線レールと同じ断面（内幅・壁の高さ）。inletDrop だけ入口側を下げ、継ぎ目を下り段差にする（D-20）。
  */
 export function shapeMesh(s: CurveShape, innerHalf: number, wallHeight: number, inletDrop: number): { vertices: Float32Array; indices: Uint32Array } {
-  const n = s.segments;
+  return pathMesh((t) => shapeFrame(s, t), s.segments, innerHalf, wallHeight, inletDrop);
+}
+
+/** 曲がった走行路（カーブ・ループ）の当たり判定の三角形メッシュ。frame(t) は t=0（入口）〜1（出口）の断面 */
+export function pathMesh(
+  frame: (t: number) => CurveFrame,
+  n: number,
+  innerHalf: number,
+  wallHeight: number,
+  inletDrop: number,
+): { vertices: Float32Array; indices: Uint32Array } {
   const verts: number[] = [];
   const idx: number[] = [];
   // 1断面あたり4点：0=左の床, 1=右の床, 2=左の壁の上, 3=右の壁の上（左右は進行方向に対して）
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    const f = shapeFrame(s, t);
-    const drop = inletDrop * (1 - t);
+    const f = frame(t);
+    // 入口側だけ下げる（最初の 1 区間で 0 に戻す。ループのように走行面が上を向かない所には効かせない）
+    const drop = inletDrop * Math.max(0, 1 - t * n);
     const at = (side: number, h: number) => {
       for (let k = 0; k < 3; k++) verts.push(f.pos[k] + f.side[k] * side + f.normal[k] * h - (k === 1 ? drop : 0));
     };

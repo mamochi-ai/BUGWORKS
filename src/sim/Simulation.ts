@@ -5,7 +5,8 @@ import { buildLabBoxes, type LabBox } from './lab';
 import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
 import type { PlacedDevice, SliceLayout } from './layout';
 import { inGoal, platformHeight } from './goal';
-import { curveShape, shapeMesh } from './curveGeometry';
+import { curveShape, pathMesh, shapeMesh } from './curveGeometry';
+import { LOOP, loopFrame, loopRadius } from './loopGeometry';
 import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel } from './magnet';
@@ -593,6 +594,7 @@ export class Simulation {
 
     for (const track of this.tracks) this.addRailColliders(track);
     for (const d of this._layout.devices) if (d.type === 'curve') this.addCurveColliders(d);
+    for (const d of this._layout.devices) if (d.type === 'loop') this.addLoopColliders(d);
     for (const d of this._layout.devices) {
       if (d.type === 'paddle') this.paddles.push({ deviceId: d.id, device: d, angle: 0, target: 0, passes: 0, inside: new Set() });
       if (d.type === 'bridge') this.addBridge(d);
@@ -857,6 +859,19 @@ export class Simulation {
       R.ColliderDesc.cuboid((f.maxX - f.minX) / 2, (f.maxY - f.minY) / 2, (f.maxZ - f.minZ) / 2).setFriction(MATERIAL.floorFriction),
       body,
     );
+  }
+
+  /** ループ：縦の円に沿った走行面（円の外側）と側壁の三角形メッシュ */
+  private addLoopColliders(d: PlacedDevice): void {
+    const R = this.R;
+    const radius = loopRadius(d);
+    const { vertices, indices } = pathMesh((t) => loopFrame(radius, t), LOOP.segments, RAIL_PROFILE.innerWidth / 2, RAIL_PROFILE.wallHeight, JOINT_DROP);
+    const body = this.world.createRigidBody(
+      R.RigidBodyDesc.fixed()
+        .setTranslation(...d.position)
+        .setRotation(quatFromYawPitch((d.rotationYDeg * Math.PI) / 180, 0)),
+    );
+    this.world.createCollider(R.ColliderDesc.trimesh(vertices, indices, R.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(MATERIAL.railFriction), body);
   }
 
   /** カーブレール：弧に沿った走行面と側壁の三角形メッシュ */

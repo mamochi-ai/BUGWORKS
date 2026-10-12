@@ -108,6 +108,19 @@ const PROTOTYPE_DEVICES: DeviceDef[] = [
     prototypeOnly: true,
   },
   {
+    // ループ（宙返り）：縦に1周して、横に0.5mずれた所から出る（loopGeometry.ts, D-33）。外形は半径で変わる
+    id: 'loop',
+    name: 'ループ',
+    size: [0.9, 1.35, 1.1],
+    ports: [
+      { id: 'ball_in', type: 'ball', position: [0, 0.35, 0], direction: [0, 0, -1] },
+      { id: 'ball_out', type: 'ball', position: [0.5, 0.3, 0], direction: [0, 0, 1] },
+    ],
+    params: { radius: 0.35 },
+    movingParts: [],
+    prototypeOnly: true,
+  },
+  {
     // 軸：長さは設定で変える（ポートの z は長さの半分）
     id: 'shaft',
     name: '軸',
