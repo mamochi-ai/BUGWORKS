@@ -145,3 +145,26 @@ describe('アンロック順（順番に解放, D-27）', () => {
     expect(unlockState('9-9', ['1-1']).unlocked).toBe(false);
   });
 });
+
+describe('ステージ2：ひと工夫しないと解けない', () => {
+  let R: Rapier;
+  beforeAll(async () => {
+    R = await loadRapier();
+  });
+  const st = (id: string) => STAGES.find((s) => s.id === id)!;
+  const withSolution = (id: string, change: (d: PlacedDevice) => PlacedDevice) => [...st(id).devices, ...st(id).solution.map(change)];
+
+  it('2-1 / 2-2 / 2-5：バネを置いただけ（傾き0°・強さ 5m/s のまま）では届かない', () => {
+    for (const id of ['2-1', '2-2', '2-5']) {
+      const devices = withSolution(id, (d) => (d.type === 'spring' ? { ...d, params: {} } : d));
+      expect(play(R, devices, st(id), 8).clearedAt, id).toBeNull();
+    }
+  });
+
+  it('2-4：スイッチを置いても磁石に配線しないと、磁石が球をそらしてゴールしない', () => {
+    const devices = withSolution('2-4', (d) => ({ ...d, signalTargets: [] }));
+    const r = play(R, devices, st('2-4'), 10);
+    expect(r.events.switch_on).toBe(true);
+    expect(r.events.ball_enter_goal).toBe(false);
+  });
+});

@@ -15,11 +15,11 @@
 | G-05 | 向きの不一致：装置JSONのレールは前方 +Z。blockout は `rotationYDegrees: 0` のままレールを +X 方向に並べている | devices / stage1_blockout | blockout をそのまま読むとレールが進行方向に対し横向きになる。どちらかの修正が必要 |
 | G-06 | ステージ1の内容が資料間で異なる。v1.0：1-1「あと一本」1-2「角度の問題」1-3「三度目の正直」1-4「上に行きたい（バネ）」。stage1 v0.1：1-1「はじめの一歩」1-2「バネでジャンプ」1-3「曲がって運ぶ」1-4「歯車で動かす」。歯車は v1.0 では第3章 | stages README / stage1 README・blockout | **v0.1 を基準に決定**（ユーザー判断, DECISIONS D-26）。座標は作り直し |
 | G-07 | 操作の割り当て：マスター「左クリック選択・ドラッグ配置・右ドラッグ回転」／操作ガイド画像「右ドラッグ回転」と「右クリック削除」が同じボタン／ステージ資料「1本指ドラッグで回転」 vs マスター「1本指で選択/ドラッグ、空き領域で視点操作」 | MASTER §8 / controls.png / stages README | 「部品上なら部品ドラッグ、空き領域なら回転」で試作済み（DECISIONS D-17）。iPad 実機で要評価 |
-| G-08 | 設計図の保存項目：マスター §7 は `schemaVersion, engineVersion, physicsProfile, seed, devices, connections, ports, initialState`。stage1 README は `schemaVersion, stageId, parts, connections, creatorDefinedName`（`parts` と `devices`、`creatorDefinedName` と `title` の名称差、stageId がマスターに無い） | MASTER §7 / stage1 README | 未実装。マスターを基準にし、stageId を任意キーとして追加する案 |
+| G-08 | 設計図の保存項目：マスター §7 は `schemaVersion, engineVersion, physicsProfile, seed, devices, connections, ports, initialState`。stage1 README は `schemaVersion, stageId, parts, connections, creatorDefinedName`（`parts` と `devices`、`creatorDefinedName` と `title` の名称差、stageId がマスターに無い） | MASTER §7 / stage1 README | マスター §7 を基準に実装。stageId は任意キー、parts→devices・creatorDefinedName→title に読み替え（DECISIONS D-34） |
 | G-09 | 証明書サンプルの `triggeredBugIds: ["infinite_loop"]` が、バグJSONのID体系 `BUG-03`（無限ループ君）と一致しない | certificate.example / hidden_bugs_developer | 未実装。`BUG-xx` に統一する案 |
 | G-10 | 回転表現：建築仕様は `rotation: quaternion_xyzw` と宣言しているが、配置例は `rotationYDeg`、blockout は `rotationYDegrees` | architecture.modules / example-layout / blockout | 試作は Y軸度数（90度スナップ想定）を内部で使用 |
 | G-11 | 原点の定義：建築モジュールは `bounding_box_center`、装置JSONは未記載（ポートの y が 0〜高さに分布しており接地面原点に見える） | architecture.modules / devices | DECISIONS D-05 |
-| G-12 | 設計図ルートの `ports` キーの役割が不明（ポートは装置定義側にあり、接続は `connections` が持つ） | MASTER §7 | 未実装。要定義 |
+| G-12 | 設計図ルートの `ports` キーの役割が不明（ポートは装置定義側にあり、接続は `connections` が持つ） | MASTER §7 | 空配列で保存（役割が決まるまで使わない, D-34） |
 | G-13 | 公開図鑑JSONに未発見バグの効果文 `description_unlocked` がそのまま入っている。発動条件ではないが、配信物に含めると効果が事前に読める | bug_codex_public | 試作では未使用。図鑑実装時は発見時にだけ参照する構造か、配信方法を要検討（DECISIONS D-12） |
 | G-14 | ASSET_INVENTORY は画像ZIPを「別途保管（未同梱）」としているが、2026-10-10 の一括ZIPには同梱されている | ASSET_INVENTORY.csv / README_収録一覧 | 一覧の状態更新が必要 |
 | G-15 | stage1 README の時間表（1-4「歯車と橋」）とステージ v1.0 の初回5分表（2:40 バネ、3:30 異常ヒント）が一致しない | stage1 README / stages README | v0.1 の流れを採用（D-26）。時間表は未使用 |
