@@ -2,6 +2,7 @@ import { getDeviceDef } from '../sim/catalog';
 import type { DeviceType, PlacedDevice, SliceLayout } from '../sim/layout';
 import { findSpec, formatParam, normalizeParam, paramValue } from './params';
 import { acceptsSignal } from '../sim/switch';
+import { portWorldPosition } from '../sim/railGeometry';
 import {
   PLACEMENT,
   PROBLEM_TEXT,
@@ -269,8 +270,16 @@ export class EditorModel {
     }
     const v = normalizeParam(spec, value);
     if (paramValue(d, key) === v) return false;
+    let next: PlacedDevice = { ...d, params: { ...(d.params ?? {}), [key]: v } };
+    // レール・カーブは形が変わっても入口の位置を保つ（手前の装置とのつながりが切れないように, D-31）
+    if (d.type === 'rail' || d.type === 'curve') {
+      const before = portWorldPosition(d, 'ball_in');
+      const after = portWorldPosition(next, 'ball_in');
+      // 45°の曲がり終わりは入口が斜めの位置にあるので、細かく丸める（ポートの一致を保つ）
+      next = { ...next, position: [0, 1, 2].map((i) => Math.round((d.position[i] + before[i] - after[i]) * 1e9) / 1e9) as PlacedDevice['position'] };
+    }
     return this.tryReplace(
-      { ...d, params: { ...(d.params ?? {}), [key]: v } },
+      next,
       `${id} の${spec.label}を ${formatParam(spec, v)} にしました`,
       '変更できません',
     );

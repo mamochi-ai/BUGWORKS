@@ -109,3 +109,22 @@ export const SWITCH_SAMPLE_LAYOUT: SliceLayout = {
     { id: 'goal_2', type: 'goal', position: [2.5, 0, 3.75], rotationYDeg: 0 },
   ],
 };
+
+/**
+ * 見本「いろいろなレール」（DECISIONS.md D-31）：3m で 0.4m 下る直線 → 急なカーブ → 1m のほぼ水平な直線 →
+ * 45°の曲がり始め＋曲がり終わり（隣の列への車線変更）→ 直線 → ゴール。
+ * 車線変更のあとは位置が 0.25m グリッドから少しずれる（斜めの長さが割り切れないため）。
+ */
+export const RAIL_SAMPLE_LAYOUT: SliceLayout = {
+  seed: 404,
+  devices: [
+    { id: 'launcher_1', type: 'launcher', position: [-3, 1, -3.65], rotationYDeg: 0 },
+    { id: 'rail_1', type: 'rail', position: [-3, 1.2, -1.5], rotationYDeg: 0, params: { lengthMeters: 3, slopeMeters: 0.4 } },
+    { id: 'curve_1', type: 'curve', position: [-2.75, 1, 0.5], rotationYDeg: 0, params: { radius: 0.75, turn: 1 } },
+    { id: 'rail_2', type: 'rail', position: [-1.75, 0.9, 0.75], rotationYDeg: 90, params: { lengthMeters: 1, slopeMeters: 0.1 } },
+    { id: 'curve_2', type: 'curve', position: [-0.75, 0.7, 0.75], rotationYDeg: 90, params: { arc: 1, turn: 1 } },
+    { id: 'curve_3', type: 'curve', position: [0.017766952, 0.7, 0.017766952], rotationYDeg: 180, params: { arc: 2, turn: -1 } },
+    { id: 'rail_3', type: 'rail', position: [1.517766952, 0.5, 0.017766952], rotationYDeg: 90, params: { lengthMeters: 2, slopeMeters: 0.2 } },
+    { id: 'goal_1', type: 'goal', position: [3.25, 0, 0], rotationYDeg: 0 },
+  ],
+};

@@ -5,7 +5,7 @@ import { buildLabBoxes, type LabBox } from './lab';
 import { CHUTE_LENGTH, CHUTE_STOP_D, LAUNCHER_SHAPE, MAX_BALLS, chuteLocal, launcherToWorld, planLauncher, type LauncherPlan } from './launcher';
 import type { PlacedDevice, SliceLayout } from './layout';
 import { inGoal, platformHeight } from './goal';
-import { curveMesh, curveTurn } from './curveGeometry';
+import { curveShape, shapeMesh } from './curveGeometry';
 import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel } from './magnet';
@@ -739,7 +739,7 @@ export class Simulation {
   /** カーブレール：弧に沿った走行面と側壁の三角形メッシュ */
   private addCurveColliders(d: PlacedDevice): void {
     const R = this.R;
-    const { vertices, indices } = curveMesh(curveTurn(d), RAIL_PROFILE.innerWidth / 2, RAIL_PROFILE.wallHeight, JOINT_DROP);
+    const { vertices, indices } = shapeMesh(curveShape(d), RAIL_PROFILE.innerWidth / 2, RAIL_PROFILE.wallHeight, JOINT_DROP);
     const body = this.world.createRigidBody(
       R.RigidBodyDesc.fixed()
         .setTranslation(...d.position)

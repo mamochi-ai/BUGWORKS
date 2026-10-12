@@ -6,7 +6,7 @@ import { buildRailTrack, portWorldPosition } from '../sim/railGeometry';
 import { quatFromYawPitch } from '../sim/Simulation';
 import { planLauncher } from '../sim/launcher';
 import type { Simulation } from '../sim/Simulation';
-import { curveFrame, curveToWorld, curveTurn } from '../sim/curveGeometry';
+import { curveShape, curveToWorld, shapeFrame } from '../sim/curveGeometry';
 import { LauncherModelFactory } from './LauncherModel';
 import { SpringModelFactory } from './SpringModel';
 import { GoalModelFactory } from './GoalModels';
@@ -196,7 +196,7 @@ export class DeviceLayer {
     for (const d of devices) {
       if (d.type !== 'rail' && d.type !== 'curve' && d.type !== 'paddle' && d.type !== 'switch') continue;
       // カーブは弧の中央にも支柱を立てる
-      const extra: Vec3[] = d.type === 'curve' ? [curveToWorld(d, curveFrame(curveTurn(d), 0.5).pos)] : [];
+      const extra: Vec3[] = d.type === 'curve' ? [curveToWorld(d, shapeFrame(curveShape(d), 0.5).pos)] : [];
       for (const p of [...['ball_in', 'ball_out'].map((id) => portWorldPosition(d, id)), ...extra]) {
         if (seen.has(key(p))) continue;
         seen.add(key(p));

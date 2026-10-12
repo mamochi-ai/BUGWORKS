@@ -75,7 +75,7 @@ const PROTOTYPE_DEVICES: DeviceDef[] = [
       { id: 'ball_in', type: 'ball', position: [-0.5, 0.35, -0.75], direction: [0, 0, -1] },
       { id: 'ball_out', type: 'ball', position: [0.75, 0.15, 0.5], direction: [1, 0, 0] },
     ],
-    params: { turn: 1 },
+    params: { turn: 1, radius: 1.25, arc: 0 },
     movingParts: [],
     prototypeOnly: true,
   },
