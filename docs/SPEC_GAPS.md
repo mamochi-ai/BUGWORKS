@@ -20,7 +20,7 @@
 | G-10 | 回転表現：建築仕様は `rotation: quaternion_xyzw` と宣言しているが、配置例は `rotationYDeg`、blockout は `rotationYDegrees` | architecture.modules / example-layout / blockout | 試作は Y軸度数（90度スナップ想定）を内部で使用 |
 | G-11 | 原点の定義：建築モジュールは `bounding_box_center`、装置JSONは未記載（ポートの y が 0〜高さに分布しており接地面原点に見える） | architecture.modules / devices | DECISIONS D-05 |
 | G-12 | 設計図ルートの `ports` キーの役割が不明（ポートは装置定義側にあり、接続は `connections` が持つ） | MASTER §7 | 空配列で保存（役割が決まるまで使わない, D-34） |
-| G-13 | 公開図鑑JSONに未発見バグの効果文 `description_unlocked` がそのまま入っている。発動条件ではないが、配信物に含めると効果が事前に読める | bug_codex_public | 試作では未使用。図鑑実装時は発見時にだけ参照する構造か、配信方法を要検討（DECISIONS D-12） |
+| G-13 | 公開図鑑JSONに未発見バグの効果文 `description_unlocked` がそのまま入っている。発動条件ではないが、配信物に含めると効果が事前に読める | bug_codex_public | 図鑑には実装したバグの名前・説明だけをアプリに入れ、未発見は名前も出さない（DECISIONS D-37） |
 | G-14 | ASSET_INVENTORY は画像ZIPを「別途保管（未同梱）」としているが、2026-10-10 の一括ZIPには同梱されている | ASSET_INVENTORY.csv / README_収録一覧 | 一覧の状態更新が必要 |
 | G-15 | stage1 README の時間表（1-4「歯車と橋」）とステージ v1.0 の初回5分表（2:40 バネ、3:30 異常ヒント）が一致しない | stage1 README / stages README | v0.1 の流れを採用（D-26）。時間表は未使用 |
 | G-17 | 発射機の `angleDegrees: 45` はレールへの送り出しと両立しない（45°で撃つとレールを飛び越える）。角度の意味（打ち上げ角か、アームの傾きか）が未定義 | devices.v0.1 | 角度＝溝の傾き（後端が軸）。レールにつないでいる間は 0° に固定（DECISIONS D-18） |

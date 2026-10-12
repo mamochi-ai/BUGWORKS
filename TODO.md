@@ -38,9 +38,10 @@
 - [ ] カーブ・坂・ループなど他のレール形状の見た目（デザイン画 rail_*.png を参考）
 
 ## 2. 手順3：隠しバグ 3種だけ
-- [ ] `triggerDetector` / `effectController` / `visualEffectId` / `safetyBudget` の分離構造
-- [ ] tick ベースの発動履歴、seed 固定乱数
-- [ ] 発見→演出→図鑑（未発見条件を UI・保存に出さない）
+- [x] まず3種（BUG-12・BUG-16・BUG-18）、発動の記録（tick）、効果の上限（D-37）
+- [x] 発見→演出→図鑑（未発見条件を UI・保存に出さない）
+- [ ] `triggerDetector` / `effectController` / `visualEffectId` / `safetyBudget` を装置ごとの部品に分ける（今は bugs.ts と Simulation に直接）
+- [ ] 残りの37種
 - [ ] 60Hz 前提の tick 表記の扱いを決める（SPEC_GAPS G-02）
 
 ## 3. 手順4：永久機関検証
@@ -52,11 +53,12 @@
 ## 4. 手順5：設計図JSON
 - [ ] スキーマ定義（schemaVersion / engineVersion / physicsProfile を区別）と厳格な検証
 - [x] 設計図の保存（この端末・ファイル）と検査付きの読み込み（D-34）
-- [ ] 設計図の連結（ID の名前空間付き振り直し・再検証）
+- [x] 設計図の連結（ID の名前空間付き振り直し・再検証, D-38）
 - [ ] 進捗は IndexedDB、設計図JSONに図鑑進捗を含めない
 
 ## 5. 手順6以降
-- [ ] ステージ3以降（G-01）、S-404 の演出、UI/音、バグ拡張
+- [x] ステージ3「まわる」（D-39）、効果音・S-404・紙ふぶき（D-40）
+- [ ] ステージ4以降（G-01）、バグ拡張、BGM
 - [ ] WASM 分離とオフラインキャッシュ（DECISIONS D-13）
 - [ ] ブラウザ・iPad の性能/再現性/セーブ復元テスト後に Web 公開
 

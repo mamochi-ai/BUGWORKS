@@ -9,7 +9,8 @@ import { curveShape, pathMesh, shapeMesh } from './curveGeometry';
 import { LOOP, loopFrame, loopRadius } from './loopGeometry';
 import { BRIDGE, PADDLE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
-import { magnetAccel } from './magnet';
+import { magnetAccel, magnetParams } from './magnet';
+import { BUG_TUNING, facingRepelPairs, onFloor, slickDirection, wornFrictionFactor, type BugTrigger, type MagnetPair } from './bugs';
 import { inSwitchZone, signalSources } from './switch';
 import { ROTATOR, alignedWithEntry, atRotatorEntry, exitFor, rotatorParams, rotatorToLocal, rotatorToWorld, travelDir } from './rotator';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
@@ -115,6 +116,8 @@ export interface SimSnapshot {
   launchers: LauncherState[];
   switches: SwitchState[];
   rotators: RotatorState[];
+  /** この再生で発動した隠しバグ */
+  bugs: BugTrigger[];
   /** 場外に落ちて取り除いた球の数 */
   lostBalls: number;
 }
@@ -149,6 +152,13 @@ const MATERIAL = {
  * 回転装置の台を「まっすぐの向き（π の倍数）」で止めるための、このtickの回転量。
  * すでにまっすぐなら 0。次のまっすぐの向きを越えるなら、ちょうどそこまで。
  */
+/** BUG-16 の効果：しりぞけるはずの磁石が、決められた範囲でだけ引きよせる（力は上限まで） */
+function flippedAccel(m: PlacedDevice, p: Vec3): Vec3 | null {
+  const { radius, maxForceNewton } = magnetParams(m);
+  const flipped: PlacedDevice = { ...m, params: { ...m.params, mode: 1, radius, maxForceNewton: Math.min(maxForceNewton, BUG_TUNING.flipMaxForce) } };
+  return magnetAccel(flipped, p);
+}
+
 export function parkStep(angle: number, dA: number): number {
   const k = angle / Math.PI;
   if (Math.abs(k - Math.round(k)) < 1e-9) return 0;
@@ -169,6 +179,14 @@ export class Simulation {
   private shaftLinks: ShaftLink[] = [];
   private magnets: PlacedDevice[] = [];
   private rotators: (RotatorState & { device: PlacedDevice })[] = [];
+  // ---- 隠しバグ（D-37）の状態。どれも再生ごと（リセットで初期化）
+  private bugTriggers: BugTrigger[] = [];
+  private stillTicks = new Map<number, number>();
+  private slick = new Map<number, { left: number; dir: Vec3 }>();
+  private magnetPairs: (MagnetPair & { centerTicks: number; flipped: boolean })[] = [];
+  private railColliders = new Map<string, ReturnType<World['createCollider']>[]>();
+  private railPasses = new Map<string, number>();
+  private railAlong = new Map<string, number>();
   private switches: (SwitchState & { device: PlacedDevice; inside: Set<number> })[] = [];
   /** 信号を受ける装置ID → 配線されたスイッチID */
   private signalFrom = new Map<string, string[]>();
@@ -258,7 +276,9 @@ export class Simulation {
     this.stepDrive();
     this.stepMagnets();
     this.stepRotators();
+    this.applyBugEffects();
     this.world.step();
+    this.detectBugs();
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const b = this.balls[i];
       const t = b.body.translation();
@@ -308,6 +328,9 @@ export class Simulation {
       r.queue = r.queue.filter((id) => id !== b.id);
       if (r.riding?.ballId === b.id) r.riding = null;
     }
+    this.stillTicks.delete(b.id);
+    this.slick.delete(b.id);
+    for (const k of [...this.railAlong.keys()]) if (k.endsWith(`:${b.id}`)) this.railAlong.delete(k);
     this.world.removeRigidBody(b.body);
     this.balls.splice(index, 1);
   }
@@ -388,13 +411,14 @@ export class Simulation {
    * ステージのクリア判定に使う出来事（この再生で一度でも起きたか）。
    * 判定は物理の状態から読むだけで、ゲームの進行には影響しない。
    */
-  events(): { ball_enter_goal: boolean; spring_triggered: boolean; paddle_turned: boolean; bridge_connected: boolean; switch_on: boolean } {
+  events(): { ball_enter_goal: boolean; spring_triggered: boolean; paddle_turned: boolean; bridge_connected: boolean; switch_on: boolean; all_goals: boolean } {
     return {
       ball_enter_goal: this.goalHits > 0,
       spring_triggered: this.springs.some((s) => s.launches > 0),
       paddle_turned: this.paddles.some((p) => p.passes > 0),
       bridge_connected: this.bridges.some((b) => b.angle === 0),
       switch_on: this.switches.some((s) => s.toggles > 0),
+      all_goals: this.goals.length > 0 && this.goals.every((g) => g.hits > 0),
     };
   }
 
@@ -484,6 +508,7 @@ export class Simulation {
         heldAt: sp.heldAt ? [sp.heldAt[0], sp.heldAt[1], sp.heldAt[2]] : null,
         launches: sp.launches,
       })),
+      bugs: this.bugTriggers.map((b) => ({ ...b, at: [...b.at] as Vec3 })),
       rotators: this.rotators.map((r) => ({ deviceId: r.deviceId, angle: r.angle, queue: [...r.queue], riding: r.riding ? { ...r.riding } : null, releases: r.releases })),
       switches: this.switches.map((s) => ({ deviceId: s.deviceId, on: s.on, toggles: s.toggles })),
       balls: this.readBalls(),
@@ -572,6 +597,13 @@ export class Simulation {
       .filter((d) => d.type === 'switch')
       .map((d) => ({ deviceId: d.id, device: d, on: false, toggles: 0, inside: new Set<number>() }));
     this.signalFrom = signalSources(this._layout.devices);
+    this.bugTriggers = [];
+    this.stillTicks = new Map();
+    this.slick = new Map();
+    this.magnetPairs = facingRepelPairs(this.magnets).map((p) => ({ ...p, centerTicks: 0, flipped: false }));
+    this.railColliders = new Map();
+    this.railPasses = new Map();
+    this.railAlong = new Map();
     this.rotators = this._layout.devices
       .filter((d) => d.type === 'rotator')
       .map((d) => ({ deviceId: d.id, device: d, angle: 0, queue: [], riding: null, releases: 0 }));
@@ -827,6 +859,107 @@ export class Simulation {
     this.world.createCollider(R.ColliderDesc.roundCuboid(h - 0.01, 0.015, h - 0.01, 0.01).setFriction(MATERIAL.railFriction), body);
   }
 
+  /** 隠しバグの効果（物理の前）。BUG-12：滑り出す球に加速を足す（速さに上限） */
+  private applyBugEffects(): void {
+    for (const [id, s] of this.slick) {
+      const b = this.balls.find((x) => x.id === id);
+      if (!b || s.left <= 0) {
+        this.slick.delete(id);
+        continue;
+      }
+      s.left--;
+      const v = b.body.linvel();
+      const nv = { x: v.x + s.dir[0] * BUG_TUNING.slickAccel * PHYSICS_DT, y: v.y, z: v.z + s.dir[2] * BUG_TUNING.slickAccel * PHYSICS_DT };
+      const hs = Math.hypot(nv.x, nv.z);
+      if (hs > BUG_TUNING.slickMaxSpeed) {
+        nv.x *= BUG_TUNING.slickMaxSpeed / hs;
+        nv.z *= BUG_TUNING.slickMaxSpeed / hs;
+      }
+      b.body.setLinvel(nv, true);
+    }
+  }
+
+  /** 隠しバグの発動判定（物理の後）。順序は固定（BUG-12 → BUG-16 → BUG-18、球は発射順） */
+  private detectBugs(): void {
+    const T = BUG_TUNING;
+    // BUG-12
+    for (const b of this.balls) {
+      const t = b.body.translation();
+      const v = b.body.linvel();
+      const p: Vec3 = [t.x, t.y, t.z];
+      if (this.slick.has(b.id) || !onFloor(p) || Math.hypot(v.x, v.y, v.z) >= T.stillSpeed) {
+        this.stillTicks.delete(b.id);
+        continue;
+      }
+      const n = (this.stillTicks.get(b.id) ?? 0) + 1;
+      this.stillTicks.set(b.id, n);
+      if (n >= T.stillSeconds / PHYSICS_DT) {
+        this.stillTicks.delete(b.id);
+        this.slick.set(b.id, { left: Math.round(T.slickSeconds / PHYSICS_DT), dir: slickDirection(p) });
+        this.bugTriggers.push({ id: 'BUG-12', tick: this._tick, at: p });
+      }
+    }
+    // BUG-16
+    for (const pair of this.magnetPairs) {
+      if (pair.flipped) continue;
+      const near = this.balls.some((b) => {
+        const t = b.body.translation();
+        const v = b.body.linvel();
+        return Math.hypot(t.x - pair.mid[0], t.z - pair.mid[2]) <= T.centerRadius && Math.abs(t.y - pair.mid[1]) < 0.7 && Math.hypot(v.x, v.y, v.z) < T.centerStill;
+      });
+      pair.centerTicks = near ? pair.centerTicks + 1 : 0;
+      if (pair.centerTicks >= T.centerSeconds / PHYSICS_DT) {
+        pair.flipped = true;
+        this.bugTriggers.push({ id: 'BUG-16', tick: this._tick, at: [...pair.mid] });
+      }
+    }
+    // BUG-18（直線レールだけ）
+    for (const track of this.tracks) {
+      const dev = this._layout.devices.find((d) => d.id === track.deviceId);
+      if (dev?.type !== 'rail') continue;
+      for (const b of this.balls) {
+        const t = b.body.translation();
+        const rel: Vec3 = [t.x - track.start[0], t.y - track.start[1], t.z - track.start[2]];
+        const along = rel[0] * track.dir[0] + rel[1] * track.dir[1] + rel[2] * track.dir[2];
+        const lat = Math.hypot(rel[0] - along * track.dir[0], rel[1] - along * track.dir[1], rel[2] - along * track.dir[2]);
+        const key = `${track.deviceId}:${b.id}`;
+        const prev = this.railAlong.get(key);
+        const goal = track.length - 0.05;
+        if (lat < 0.3) this.railAlong.set(key, along);
+        else this.railAlong.delete(key);
+        if (prev === undefined || lat >= 0.3 || !(prev < goal && along >= goal)) continue;
+        const passes = (this.railPasses.get(track.deviceId) ?? 0) + 1;
+        this.railPasses.set(track.deviceId, passes);
+        if (passes === T.passesToTrigger) this.bugTriggers.push({ id: 'BUG-18', tick: this._tick, at: [...track.end] });
+        const f = wornFrictionFactor(passes);
+        if (f < 1) for (const c of this.railColliders.get(track.deviceId) ?? []) c.setFriction(MATERIAL.railFriction * f);
+      }
+    }
+  }
+
+  /** BUG-16 が発動した向かい合う磁石の組の近くか */
+  private flippedPairNear(magnetId: string, p: Vec3): boolean {
+    return this.magnetPairs.some(
+      (q) => q.flipped && (q.a === magnetId || q.b === magnetId) && Math.hypot(p[0] - q.mid[0], p[2] - q.mid[2]) <= BUG_TUNING.flipRegion,
+    );
+  }
+
+  /** 効果音用の回数（発射・バネ・ゴール・スイッチ）。増えたら音を鳴らす */
+  soundCounters(): { tick: number; fires: number; springs: number; goals: number; toggles: number } {
+    return {
+      tick: this._tick,
+      fires: this.launchers.reduce((n, l) => n + (l.lastFireTick ?? -1) + 1, 0),
+      springs: this.springs.reduce((n, s) => n + s.launches, 0),
+      goals: this.goalHits,
+      toggles: this.switches.reduce((n, s) => n + s.toggles, 0),
+    };
+  }
+
+  /** この再生で発動した隠しバグ（発動順） */
+  bugEvents(): readonly BugTrigger[] {
+    return this.bugTriggers;
+  }
+
   /** 磁石：範囲内の鉄球に力を加える（配置順・球の順に固定。決定論のため力は速度の変化として直接加える） */
   private stepMagnets(): void {
     if (this.magnets.length === 0) return;
@@ -837,7 +970,8 @@ export class Simulation {
       let az = 0;
       for (const m of this.magnets) {
         if (!this.signalOn(m.id)) continue;
-        const a = magnetAccel(m, [t.x, t.y, t.z]);
+        const flipped = this.flippedPairNear(m.id, [t.x, t.y, t.z]);
+        const a = flipped ? flippedAccel(m, [t.x, t.y, t.z]) : magnetAccel(m, [t.x, t.y, t.z]);
         if (!a) continue;
         ax += a[0];
         ay += a[1];
@@ -906,7 +1040,8 @@ export class Simulation {
         .setTranslation(...mid)
         .setRotation(quatFromYawPitch(track.yawRad, pitch)),
     );
-    railParts(length).forEach((part, i) => this.world.createCollider(this.trackPartDesc(part, i === 0), body));
+    const colliders = railParts(length).map((part, i) => this.world.createCollider(this.trackPartDesc(part, i === 0), body));
+    this.railColliders.set(track.deviceId, colliders);
   }
 }
 

@@ -1,5 +1,6 @@
 import type { StageController } from '../stage/StageController';
 import { EVENT_TEXT, STAGES } from '../stage/stages';
+import { S404_SVG, celebrate } from './effects';
 import type { SimulationController } from '../sim/SimulationController';
 
 /**
@@ -10,7 +11,7 @@ export class StageUi {
   private el: Record<string, HTMLElement> = {};
 
   constructor(
-    root: HTMLElement,
+    private readonly root: HTMLElement,
     private readonly stage: StageController,
     private readonly ctl: SimulationController,
   ) {
@@ -24,7 +25,7 @@ export class StageUi {
       </div>
       <p class="objective" data-k="objective"></p>
       <ul class="checklist" data-k="checklist" aria-label="クリア条件"></ul>
-      <p class="s404" data-k="hint"><b>S-404</b><span data-k="hintText"></span></p>
+      <p class="s404" data-k="hint">${S404_SVG}<b>S-404</b><span data-k="hintText"></span></p>
     `;
     root.appendChild(panel);
 
@@ -74,6 +75,12 @@ export class StageUi {
     stage.onChange((c) => {
       if (c === 'clear') this.showClear();
       else this.sync();
+      // ステージが変わったら S-404 がひとこと言い直す（動きを減らす設定では動かない）
+      if (c === 'stage') {
+        this.el.hint.classList.remove('pop');
+        void this.el.hint.offsetWidth;
+        this.el.hint.classList.add('pop');
+      }
     });
     this.renderList();
     this.sync();
@@ -149,6 +156,7 @@ export class StageUi {
     this.el.clearText.textContent = `ステージ ${st.id}「${st.name}」をクリアしました。`;
     (this.el.clear.querySelector('[data-s="next"]') as HTMLButtonElement).hidden = !next;
     this.el.clear.hidden = false;
+    celebrate(this.root);
     this.sync();
   }
 
