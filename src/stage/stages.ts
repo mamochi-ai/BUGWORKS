@@ -9,13 +9,18 @@ import type { DeviceType, PlacedDevice } from '../sim/layout';
  * - required：通常クリアに必要な出来事（ステージ資料の requiredEvents）。隠しバグは必要条件にしない
  * - solution：解き方の一例（自動テストで「解ける」ことを確かめるためだけに使い、画面には出さない）
  */
-export type StageEvent = 'ball_enter_goal' | 'spring_triggered' | 'paddle_turned' | 'bridge_connected';
+export type StageEvent = 'ball_enter_goal' | 'spring_triggered' | 'paddle_turned' | 'bridge_connected' | 'switch_on' | 'blueprint_saved';
+
+/** 1回の再生ではなく、ステージの間ずっと覚えておく出来事（設計図の保存はリセットしてから行うため） */
+export const STICKY_EVENTS: readonly StageEvent[] = ['blueprint_saved'];
 
 export const EVENT_TEXT: Record<StageEvent, string> = {
   ball_enter_goal: '球がゴールに入る',
   spring_triggered: 'バネで球を打ち上げる',
   paddle_turned: '球で羽根車を回す',
   bridge_connected: '可動橋をつなぐ',
+  switch_on: 'スイッチを ON にする',
+  blueprint_saved: '設計図を保存する（この端末かファイルへ）',
 };
 
 export interface StageDef {
@@ -98,13 +103,13 @@ export const STAGES: StageDef[] = [
   {
     id: '1-5',
     name: '設計図を保存',
-    objective: '球をゴールへ届けたあと、設計図を保存しよう',
+    objective: '球をゴールへ届けたあと、上の「設計図」から設計図を保存しよう',
     hint: '再現できるなら、研究成果です。',
-    devices: [],
-    inventory: {},
-    required: ['ball_enter_goal'],
-    solution: [],
-    comingSoon: '設計図の保存（マスター仕様の手順5）ができてから遊べます',
+    // 1-1〜1-3 の復習：レールとカーブで横のゴールへ。ゴールに入れたあと保存するとクリア
+    devices: [launcher, rail('rail_1', 0.4, -2), { id: 'goal_1', type: 'goal', position: [2.25, 0, 2.25], rotationYDeg: 0 }],
+    inventory: { rail: 1, curve: 1 },
+    required: ['ball_enter_goal', 'blueprint_saved'],
+    solution: [rail('rail_2', 0.2, 0), { id: 'curve_1', type: 'curve', position: [0.5, 0, 1.75], rotationYDeg: 0, params: { turn: 1 } }],
   },
 ];
 

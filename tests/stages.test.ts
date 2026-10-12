@@ -4,7 +4,7 @@ import { PHYSICS_HZ } from '../src/sim/constants';
 import type { PlacedDevice } from '../src/sim/layout';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
-import { STAGES, unlockState, type StageDef } from '../src/stage/stages';
+import { STAGES, STICKY_EVENTS, unlockState, type StageDef } from '../src/stage/stages';
 
 const playable = STAGES.filter((s) => !s.comingSoon);
 
@@ -15,7 +15,8 @@ function play(R: Rapier, devices: PlacedDevice[], stage: StageDef, seconds: numb
   for (let i = 0; i < PHYSICS_HZ * seconds && clearedAt === null; i++) {
     s.step();
     const ev = s.events();
-    if (stage.required.every((e) => ev[e])) clearedAt = s.tick / PHYSICS_HZ;
+    // 保存などの「覚えておく出来事」は物理では起きないので、ここでは物理の出来事だけを見る
+    if (stage.required.filter((e) => !STICKY_EVENTS.includes(e)).every((e) => ev[e as keyof typeof ev])) clearedAt = s.tick / PHYSICS_HZ;
   }
   const events = s.events();
   s.dispose();
@@ -23,9 +24,11 @@ function play(R: Rapier, devices: PlacedDevice[], stage: StageDef, seconds: numb
 }
 
 describe('ステージの定義', () => {
-  it('v0.1 の 1-1〜1-5（1-5 は設計図の保存ができるまで準備中）', () => {
-    expect(STAGES.map((s) => `${s.id} ${s.name}`)).toEqual(['1-1 はじめの一歩', '1-2 バネでジャンプ', '1-3 曲がって運ぶ', '1-4 歯車で動かす', '1-5 設計図を保存']);
-    expect(STAGES.find((s) => s.id === '1-5')!.comingSoon).toBeTruthy();
+  it('v0.1 の 1-1〜1-5。1-5 はゴールのあと設計図を保存するとクリア', () => {
+    expect(STAGES.slice(0, 5).map((s) => `${s.id} ${s.name}`)).toEqual(['1-1 はじめの一歩', '1-2 バネでジャンプ', '1-3 曲がって運ぶ', '1-4 歯車で動かす', '1-5 設計図を保存']);
+    const s15 = STAGES.find((s) => s.id === '1-5')!;
+    expect(s15.comingSoon).toBeUndefined();
+    expect(s15.required).toEqual(['ball_enter_goal', 'blueprint_saved']);
   });
 
   for (const st of playable) {

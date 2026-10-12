@@ -11,6 +11,7 @@ import { EditPanel } from './ui/EditPanel';
 import { Hud } from './ui/Hud';
 import { StageController } from './stage/StageController';
 import { StageUi } from './ui/StageUi';
+import { BlueprintUi } from './ui/BlueprintUi';
 
 async function boot(): Promise<void> {
   const viewport = document.getElementById('viewport')!;
@@ -27,6 +28,7 @@ async function boot(): Promise<void> {
   new EditPanel(hudRoot, { editor, ctl, addPosition: () => ({ x: rig.controls.target.x, z: rig.controls.target.z }) });
   const stage = new StageController(editor, ctl, sim, VERTICAL_SLICE_LAYOUT);
   new StageUi(hudRoot, stage, ctl);
+  new BlueprintUi(hudRoot, editor, ctl, stage);
   stage.onChange((c) => {
     if (c !== 'stage') return;
     hud.goalBanner = stage.current === null;
