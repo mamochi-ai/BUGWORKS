@@ -13,7 +13,7 @@ const out = process.argv[2] || '.';
   const cdp = await ctx.newCDPSession(p);
   const touch = async (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x,y],i)=>({x,y,id:i})) });
   // 描画が2コマ進むまで待つ（ソフトウェア描画では1コマが数秒かかり、部品の当たり位置の更新が遅れるため）
-  const settle = async () => { await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); await settle(); };
+  const settle = async () => { await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); await p.waitForTimeout(300); };
   const drag = async (from, to, steps = 12) => {
     await touch('touchStart', [from]);
     for (let i = 1; i <= steps; i++) await touch('touchMove', [[from[0] + (to[0]-from[0])*i/steps, from[1] + (to[1]-from[1])*i/steps]]);
