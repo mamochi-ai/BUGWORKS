@@ -151,7 +151,7 @@ export class EditorModel {
     const d = this.find(switchId);
     if (!d || d.type !== 'switch' || this.guardLocked(switchId)) return false;
     this._wiringFrom = switchId;
-    this._message = { kind: 'info', text: `${switchId} の配線：つなぐ（外す）発射機か磁石をタップしてください` };
+    this._message = { kind: 'info', text: `${switchId} の配線：つなぐ（外す）発射機・磁石・回転装置をタップしてください` };
     this.emit('selection');
     this.emit('message');
     return true;
@@ -171,7 +171,7 @@ export class EditorModel {
     const t = this.find(targetId);
     if (!s || s.type !== 'switch' || !t || this.guardLocked(switchId)) return false;
     if (!acceptsSignal(t.type)) {
-      this.fail('スイッチの信号を受けられるのは発射機と磁石です');
+      this.fail('スイッチの信号を受けられるのは発射機・磁石・回転装置です');
       return false;
     }
     const targets = s.signalTargets ?? [];

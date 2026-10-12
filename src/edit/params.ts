@@ -6,6 +6,7 @@ import { curveShape } from '../sim/curveGeometry';
 import { railLength, railSlope } from '../sim/railGeometry';
 import { gearRatio, shaftLength } from '../sim/drive';
 import { magnetParams } from '../sim/magnet';
+import { rotatorParams } from '../sim/rotator';
 
 /**
  * 画面で変えられる装置の設定（範囲と刻みは試作値, DECISIONS.md D-22）。
@@ -109,6 +110,21 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
   ],
   shaft: [{ key: 'lengthMeters', label: '長さ', unit: 'm', min: 0.5, max: 3, step: 0.5 }],
   switch: [],
+  rotator: [
+    { key: 'degreesPerSecond', label: '回る速さ', unit: '°/秒', min: 15, max: 90, step: 15 },
+    {
+      key: 'direction',
+      label: '回る向き（上から見て）',
+      unit: '',
+      min: -1,
+      max: 1,
+      step: 2,
+      choices: [
+        { value: 1, label: '左回り（左へ出す）' },
+        { value: -1, label: '右回り（右へ出す）' },
+      ],
+    },
+  ],
   magnet: [
     {
       key: 'mode',
@@ -161,7 +177,9 @@ export function paramValue(device: PlacedDevice, key: string): number {
                 ? { lengthMeters: shaftLength(device) }
                 : device.type === 'magnet'
                   ? { ...magnetParams(device) }
-                  : {};
+                  : device.type === 'rotator'
+                    ? { ...rotatorParams(device) }
+                    : {};
   return all[key] ?? NaN;
 }
 

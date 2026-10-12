@@ -19,7 +19,7 @@ export interface PlacedDevice {
   signalTargets?: string[];
 }
 
-export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet' | 'switch';
+export type DeviceType = 'rail' | 'launcher' | 'spring' | 'goal' | 'platform' | 'curve' | 'paddle' | 'gearbox' | 'shaft' | 'bridge' | 'magnet' | 'switch' | 'rotator';
 
 export interface SliceLayout {
   seed: number;
@@ -126,5 +126,24 @@ export const RAIL_SAMPLE_LAYOUT: SliceLayout = {
     { id: 'curve_3', type: 'curve', position: [0.017766952, 0.7, 0.017766952], rotationYDeg: 180, params: { arc: 2, turn: -1 } },
     { id: 'rail_3', type: 'rail', position: [1.517766952, 0.5, 0.017766952], rotationYDeg: 90, params: { lengthMeters: 2, slopeMeters: 0.2 } },
     { id: 'goal_1', type: 'goal', position: [3.25, 0, 0], rotationYDeg: 0 },
+  ],
+};
+
+/**
+ * 見本「回転台で分ける」（DECISIONS.md D-32）：発射機（3秒ごと）の球がスイッチを通るたびに ON/OFF が切り替わる。
+ * スイッチは回転装置に配線してあり、ON の間は台が回って球を左（+X）の出口へ、OFF の間は台がまっすぐで止まって前の出口へ出す。
+ * 左と前のゴールに交互に入る。
+ */
+export const ROTATOR_SAMPLE_LAYOUT: SliceLayout = {
+  seed: 404,
+  devices: [
+    { id: 'launcher_1', type: 'launcher', position: [0, 0, -3.65], rotationYDeg: 0, params: { cooldownSeconds: 3 } },
+    { id: 'switch_1', type: 'switch', position: [0, 0.4, -2.5], rotationYDeg: 0, signalTargets: ['rotator_1'] },
+    { id: 'rail_1', type: 'rail', position: [0, 0.4, -1.5], rotationYDeg: 0, params: { lengthMeters: 1, slopeMeters: 0.1 } },
+    { id: 'rotator_1', type: 'rotator', position: [0, 0.2, -0.4], rotationYDeg: 0, params: { degreesPerSecond: 90 } },
+    { id: 'rail_2', type: 'rail', position: [0, 0.2, 1.2], rotationYDeg: 0 },
+    { id: 'goal_1', type: 'goal', position: [0, 0, 3], rotationYDeg: 0 },
+    { id: 'rail_3', type: 'rail', position: [1.6, 0.2, -0.4], rotationYDeg: 90 },
+    { id: 'goal_2', type: 'goal', position: [3.25, 0, -0.4], rotationYDeg: 0 },
   ],
 };

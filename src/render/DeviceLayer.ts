@@ -13,6 +13,7 @@ import { GoalModelFactory } from './GoalModels';
 import { DriveModelFactory } from './DriveModels';
 import { MagnetModelFactory } from './MagnetModel';
 import { SwitchModelFactory } from './SwitchModel';
+import { RotatorModelFactory } from './RotatorModel';
 import { RailModelFactory, createDeviceMaterials } from './RailModel';
 
 const COLOR = { selected: 0x3fd4ff, invalid: 0xff4d3d, openPort: 0xff7a1a, snapPort: 0x3fd4ff } as const;
@@ -33,6 +34,7 @@ export class DeviceLayer {
   private readonly driveFactory = new DriveModelFactory(this.mats, this.railFactory);
   private readonly magnetFactory = new MagnetModelFactory(this.mats);
   private readonly switchFactory = new SwitchModelFactory(this.mats, this.railFactory);
+  private readonly rotatorFactory = new RotatorModelFactory(this.mats, this.railFactory);
   /** スイッチの配線のケーブル */
   private readonly cables = new THREE.Group();
   private readonly rails = new Map<string, { key: string; group: THREE.Group }>();
@@ -100,6 +102,8 @@ export class DeviceLayer {
                           ? this.magnetFactory.create(d)
                           : d.type === 'switch'
                             ? this.switchFactory.create(d)
+                            : d.type === 'rotator'
+                              ? this.rotatorFactory.create(d)
                           : this.driveFactory.createBridge(d);
       group.userData.deviceId = d.id;
       this.root.add(group);
@@ -130,6 +134,14 @@ export class DeviceLayer {
         const cable = target ? this.switchFactory.createCable(s, target) : null;
         if (cable) this.cables.add(cable);
       }
+    }
+  }
+
+  /** 回転装置の台の角度 */
+  setRotatorAngles(angles: ReadonlyMap<string, number>): void {
+    for (const [id, a] of angles) {
+      const r = this.rails.get(id);
+      if (r) this.rotatorFactory.setAngle(r.group, a);
     }
   }
 

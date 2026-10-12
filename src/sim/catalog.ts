@@ -136,9 +136,26 @@ const PROTOTYPE_DEVICES: DeviceDef[] = [
   },
 ];
 
+/**
+ * 回転装置の球の入口・出口（仕様JSONに無いので試作で追加, SPEC_GAPS G-26 / DECISIONS D-32）。
+ * 入口は −Z、出口は前（+Z）・左（+X）・右（−X）。高さは台の走行面 0.35m。
+ */
+const ROTATOR_BALL_PORTS: PortDef[] = [
+  { id: 'ball_in', type: 'ball', position: [0, 0.35, -0.6], direction: [0, 0, -1] },
+  { id: 'ball_out', type: 'ball', position: [0, 0.35, 0.6], direction: [0, 0, 1] },
+  { id: 'ball_left_out', type: 'ball', position: [0.6, 0.35, 0], direction: [1, 0, 0] },
+  { id: 'ball_right_out', type: 'ball', position: [-0.6, 0.35, 0], direction: [-1, 0, 0] },
+];
+
+function withPrototypePorts(map: Map<string, DeviceDef>): Map<string, DeviceDef> {
+  const r = map.get('rotator');
+  if (r) map.set('rotator', { ...r, ports: [...r.ports, ...ROTATOR_BALL_PORTS] });
+  return map;
+}
+
 /** 装置定義は reference/shiyou_specs/devices.v0.1.json を出典とする（マスター仕様 §3）。試作の追加分は別扱い */
 export const DEVICE_CATALOG: ReadonlyMap<string, DeviceDef> = new Map([
-  ...parseDeviceCatalog(devicesJson),
+  ...withPrototypePorts(parseDeviceCatalog(devicesJson)),
   ...PROTOTYPE_DEVICES.map((d) => [d.id, d] as const),
 ]);
 

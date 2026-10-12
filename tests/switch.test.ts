@@ -26,6 +26,7 @@ describe('スイッチ（定義と配線のデータ）', () => {
   it('信号を受けられるのは発射機と磁石だけ。存在しない相手・受けられない相手は無視', () => {
     expect(acceptsSignal('launcher')).toBe(true);
     expect(acceptsSignal('magnet')).toBe(true);
+    expect(acceptsSignal('rotator')).toBe(true);
     expect(acceptsSignal('rail')).toBe(false);
     const sw: PlacedDevice = { id: 'S', type: 'switch', position: [0, 0, 0], rotationYDeg: 0, signalTargets: ['L', 'R', 'X'] };
     const devices: PlacedDevice[] = [sw, { id: 'L', type: 'launcher', position: [3, 0, 0], rotationYDeg: 0 }, { id: 'R', type: 'rail', position: [-3, 0, 0], rotationYDeg: 0 }];
@@ -56,7 +57,7 @@ describe('スイッチ（配線の操作）', () => {
     const ed = make();
     ed.startWiring('switch_1');
     ed.select('rail_1');
-    expect(ed.message?.text).toContain('発射機と磁石');
+    expect(ed.message?.text).toContain('発射機・磁石・回転装置');
     expect(byId(ed.devices, 'switch_1').signalTargets).toEqual(['launcher_2']);
     ed.startWiring('switch_1');
     ed.select(null);
