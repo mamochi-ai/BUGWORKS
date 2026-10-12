@@ -3,7 +3,7 @@ import type { SliceLayout } from '../sim/layout';
 import type { Simulation } from '../sim/Simulation';
 import type { SimulationController } from '../sim/SimulationController';
 import { loadProgress, saveProgress, type Progress } from './progress';
-import { STAGES, findStage, unlockState, type StageDef, type StageEvent } from './stages';
+import { STAGES, STICKY_EVENTS, findStage, unlockState, type StageDef, type StageEvent } from './stages';
 
 type Change = 'stage' | 'clear' | 'events';
 
@@ -14,6 +14,10 @@ type Change = 'stage' | 'clear' | 'events';
 export class StageController {
   private _current: StageDef | null = null;
   private clearedThisRun = false;
+  /** ステージを始めてからゴールに入ったことがあるか（保存のステージ用） */
+  private goalSeen = false;
+  /** ゴールに入ったあとに設計図を保存したか */
+  private savedAfterGoal = false;
   private lastEvents = '';
   private progress: Progress = loadProgress();
   private listeners = new Set<(c: Change) => void>();
@@ -45,9 +49,27 @@ export class StageController {
     return unlockState(id, this.progress.cleared);
   }
 
-  /** 今の再生で起きた出来事 */
+  /** 今の再生で起きた出来事（保存のステージでは、ゴールと保存はステージの間ずっと覚えておく） */
   events(): Record<StageEvent, boolean> {
-    return this.sim.events();
+    const ev = this.sim.events();
+    const sticky = this.isStickyStage();
+    return {
+      ...ev,
+      ball_enter_goal: ev.ball_enter_goal || (sticky && this.goalSeen),
+      blueprint_saved: this.savedAfterGoal,
+    };
+  }
+
+  /** 設計図を保存した（この端末・ファイルのどちらでも）。ゴールに入れたあとなら記録する */
+  markSaved(): void {
+    if (!this._current || !this.goalSeen) return;
+    this.savedAfterGoal = true;
+    this.update();
+  }
+
+  /** 保存のステージ（覚えておく出来事がある）か */
+  private isStickyStage(): boolean {
+    return !!this._current?.required.some((e) => STICKY_EVENTS.includes(e));
   }
 
   start(id: string): boolean {
@@ -56,6 +78,8 @@ export class StageController {
     this.ctl.ensureEditable();
     this._current = st;
     this.clearedThisRun = false;
+    this.goalSeen = false;
+    this.savedAfterGoal = false;
     this.editor.startStage(st.devices, st.inventory, `ステージ ${st.id}「${st.name}」`);
     this.emit('stage');
     return true;
@@ -79,9 +103,11 @@ export class StageController {
   /** 描画フレームごとに呼ぶ */
   update(): void {
     if (!this._current) return;
+    if (this.sim.events().ball_enter_goal) this.goalSeen = true;
     this.emitEvents();
-    if (this.clearedThisRun || this.ctl.state === 'ready') return;
-    const ev = this.sim.events();
+    // 保存のステージは、保存（初期状態で行う）でもクリアになる
+    if (this.clearedThisRun || (this.ctl.state === 'ready' && !this.isStickyStage())) return;
+    const ev = this.events();
     if (this._current.required.every((e) => ev[e])) {
       this.clearedThisRun = true;
       if (!this.progress.cleared.includes(this._current.id)) {
@@ -98,7 +124,7 @@ export class StageController {
   }
 
   private emitEvents(): void {
-    const key = JSON.stringify(this.sim.events());
+    const key = JSON.stringify(this.events());
     if (key === this.lastEvents) return;
     this.lastEvents = key;
     this.emit('events');

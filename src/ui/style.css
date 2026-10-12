@@ -193,3 +193,30 @@ html, body {
 /* 見本のボタンは名前が長いので、小さめの文字で折り返す */
 .edit .samples .row button { font-size: 12px; line-height: 1.25; }
 .edit .samples .row button span, .edit .samples .row button { white-space: normal; }
+
+/* 設計図の保存・読み込み */
+.bp-open {
+  min-height: 44px; padding: 4px 12px; border-radius: 8px; border: 1px solid var(--line); background: #262b32; color: var(--text);
+  font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; touch-action: manipulation;
+}
+.bp-open i { font-style: normal; }
+.bp-open:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.bp-sec { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.bp-sec h3 { margin: 0; font-size: 14px; color: var(--muted); }
+.bp-name { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.bp-name input {
+  min-height: 48px; font-size: 16px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: #11151a; color: var(--text); -webkit-user-select: text; user-select: text;
+}
+.bp-name input:focus-visible { outline: 3px solid var(--cyan); outline-offset: 1px; }
+.bp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.bp-list li { display: flex; align-items: center; gap: 8px; }
+.bp-list .bp-item-name { flex: 1; display: flex; flex-direction: column; font-size: 14px; overflow-wrap: anywhere; }
+.bp-list .bp-item-name small { color: var(--muted); font-size: 12px; }
+.bp-list .bp-empty { color: var(--muted); font-size: 13px; }
+.bp-list button { min-height: 44px; min-width: 64px; justify-content: center; }
+.bp-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.bp-msg { margin: 0; font-size: 13.5px; min-height: 1.4em; }
+.bp-msg[data-kind='error'] { color: #ff8a7a; }
+.bp-msg[data-kind='info'] { color: var(--cyan); }
+@media (max-width: 700px) { .bp-open span { display: none; } }
