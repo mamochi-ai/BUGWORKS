@@ -1,6 +1,7 @@
 import { CODEX } from '../bugs/codexData';
 import { loadCodex, recordDiscovery } from '../bugs/codex';
 import type { BugTrigger } from '../sim/bugs';
+import { S404_SVG } from './effects';
 
 /**
  * 隠しバグの発見の演出と、バグ図鑑（D-37）。
@@ -30,7 +31,7 @@ export class BugUi {
     discover.setAttribute('aria-labelledby', 'bug-discover-title');
     discover.innerHTML = `
       <p class="bug-alert" aria-hidden="true">⚠ ANOMALY</p>
-      <p class="bug-s404"><b>S-404</b>「仕様です。」</p>
+      <p class="bug-s404">${S404_SVG}<b>S-404</b>「仕様です。」</p>
       <h2 id="bug-discover-title" data-k="dTitle"></h2>
       <p class="bug-desc" data-k="dDesc"></p>
       <p class="bug-note">バグ図鑑に登録しました。同じことをもう一度起こすと、また起きます。</p>

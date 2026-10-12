@@ -944,6 +944,17 @@ export class Simulation {
     );
   }
 
+  /** 効果音用の回数（発射・バネ・ゴール・スイッチ）。増えたら音を鳴らす */
+  soundCounters(): { tick: number; fires: number; springs: number; goals: number; toggles: number } {
+    return {
+      tick: this._tick,
+      fires: this.launchers.reduce((n, l) => n + (l.lastFireTick ?? -1) + 1, 0),
+      springs: this.springs.reduce((n, s) => n + s.launches, 0),
+      goals: this.goalHits,
+      toggles: this.switches.reduce((n, s) => n + s.toggles, 0),
+    };
+  }
+
   /** この再生で発動した隠しバグ（発動順） */
   bugEvents(): readonly BugTrigger[] {
     return this.bugTriggers;

@@ -13,6 +13,7 @@ import { StageController } from './stage/StageController';
 import { StageUi } from './ui/StageUi';
 import { BlueprintUi } from './ui/BlueprintUi';
 import { BugUi } from './ui/BugUi';
+import { Sound, SoundWatcher } from './ui/Sound';
 
 async function boot(): Promise<void> {
   const viewport = document.getElementById('viewport')!;
@@ -31,6 +32,26 @@ async function boot(): Promise<void> {
   new StageUi(hudRoot, stage, ctl);
   new BlueprintUi(hudRoot, editor, ctl, stage);
   const bugUi = new BugUi(hudRoot);
+  // 効果音（D-40）：上のバーに ON/OFF。クリア・発見でも鳴らす
+  const sound = new Sound();
+  const soundWatch = new SoundWatcher(sound);
+  const soundBtn = document.createElement('button');
+  soundBtn.type = 'button';
+  soundBtn.className = 'bp-open';
+  const syncSound = () => {
+    soundBtn.innerHTML = sound.enabled ? '<i aria-hidden="true">♪</i><span>音 ON</span>' : '<i aria-hidden="true">♪</i><span>音 OFF</span>';
+    soundBtn.setAttribute('aria-label', sound.enabled ? '効果音を消す（いまは ON）' : '効果音を鳴らす（いまは OFF）');
+    soundBtn.setAttribute('aria-pressed', String(sound.enabled));
+  };
+  soundBtn.addEventListener('click', () => {
+    sound.setEnabled(!sound.enabled);
+    syncSound();
+    sound.play('tap');
+  });
+  syncSound();
+  hudRoot.querySelector('.hud-top')?.appendChild(soundBtn);
+  bugUi.setOnDiscover(() => sound.play('bug'));
+  stage.onChange((c) => c === 'clear' && sound.play('clear'));
   // この再生で発動したバグのうち、まだ画面に出していないもの（同じバグは1回の再生で1回だけ知らせる）
   let bugSeen = 0;
   const bugShown = new Set<string>();
@@ -104,6 +125,7 @@ async function boot(): Promise<void> {
     else alpha = 1;
 
     stage.update();
+    soundWatch.update(sim.soundCounters());
     const bugs = sim.bugEvents();
     // 配置の差し替えなどで記録が消えたら、数え直す
     if (bugs.length < bugSeen) {

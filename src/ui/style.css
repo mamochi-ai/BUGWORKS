@@ -260,3 +260,21 @@ html, body {
 .codex-list li[data-found='false'] b { color: var(--muted); }
 .codex-list small { color: var(--muted); font-size: 11.5px; }
 @media (max-width: 700px) { .codex-list { grid-template-columns: 1fr; } }
+
+/* S-404 の顔と、クリアの紙ふぶき（D-40） */
+.s404-face { width: 30px; height: 30px; flex-shrink: 0; align-self: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .s404-face .s404-eyes { animation: s404-blink 4.2s infinite; transform-origin: 20px 20px; }
+  .s404.pop { animation: s404-pop 360ms ease-out; }
+}
+@keyframes s404-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes s404-pop { from { transform: translateY(6px) scale(0.96); opacity: 0.2; } to { transform: none; opacity: 1; } }
+.bug-s404 { display: flex; align-items: center; gap: 8px; }
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti span {
+  position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; opacity: 0.95;
+  animation: confetti-fall 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
+}
+@keyframes confetti-fall {
+  to { transform: translate(var(--drift), 95vh) rotate(var(--spin)); opacity: 0; }
+}
