@@ -48,7 +48,7 @@ export const PLACEMENT = {
   maxHeight: 3,
   /** 装置を置ける範囲（床 ±6m から壁・縁石の厚みを除いた内側） */
   bounds: { min: -5.75, max: 5.75 },
-  maxDevices: 40,
+  maxDevices: 100,
 } as const;
 
 export interface PortRef {
