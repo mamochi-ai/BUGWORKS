@@ -97,13 +97,13 @@ describe('上り坂・斜めの直線レール・ループ（物理）', () => {
     expect(backTop).toBe(true);
   });
 
-  it('勢いが足りないと：上り坂 0.2m は上りきれない', () => {
-    // 上り坂を 0.2m にし、ループの出口とつながるよう、上り坂から先を 0.1m 上げる
+  it('勢いが足りないと：上り坂 0.4m は上りきれない', () => {
+    // 上り坂を 0.4m にし、ループの出口とつながるよう、上り坂から先を 0.3m 上げる
     const steep = LOOP_SAMPLE_LAYOUT.devices.map((d) =>
       d.id === 'rail_3'
-        ? { ...d, position: [d.position[0], d.position[1] + 0.1, d.position[2]] as PlacedDevice['position'], params: { ...d.params, slopeMeters: -0.2 } }
+        ? { ...d, position: [d.position[0], d.position[1] + 0.3, d.position[2]] as PlacedDevice['position'], params: { ...d.params, slopeMeters: -0.4 } }
         : ['curve_1', 'rail_4', 'curve_2'].includes(d.id)
-          ? { ...d, position: [d.position[0], d.position[1] + 0.1, d.position[2]] as PlacedDevice['position'] }
+          ? { ...d, position: [d.position[0], d.position[1] + 0.3, d.position[2]] as PlacedDevice['position'] }
           : d,
     );
     expect(findConnections(steep)).toHaveLength(7);

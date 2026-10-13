@@ -14,7 +14,7 @@ export const MAX_STEPS_PER_FRAME = 16;
 export const MAX_FRAME_SECONDS = 0.25;
 
 /** 物理プロファイル識別子（設計図JSONの physicsProfile 用）。縦切り試作専用の暫定値。 */
-export const PHYSICS_PROFILE = 'proto-vslice-120hz-0';
+export const PHYSICS_PROFILE = 'proto-vslice-120hz-1';
 export const ENGINE_VERSION = '0.0.1-vslice';
 
 export const GRAVITY = { x: 0, y: -9.81, z: 0 };

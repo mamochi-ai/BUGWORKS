@@ -282,7 +282,7 @@ export const STAGES: StageDef[] = [
     devices: [...floorChain(), { id: 'goal_1', type: 'goal', position: [-1, 0, 4.5], rotationYDeg: 0 }],
     inventory: { magnet: 1 },
     required: ['ball_enter_goal'],
-    solution: [magnet('magnet_1', 1.25, 3.5, 270, { mode: -1, maxForceNewton: 40, radius: 2.5 })],
+    solution: [magnet('magnet_1', 1, 3.5, 270, { mode: -1, maxForceNewton: 40, radius: 3 })],
   },
   {
     id: '4-3',
@@ -299,10 +299,10 @@ export const STAGES: StageDef[] = [
     name: 'つり合い',
     objective: '左の磁石が球を引っぱってしまう。もう1台の磁石で打ち消して、まっすぐゴールへ',
     hint: 'つり合い、という言葉があります。',
-    devices: [...floorChain(), magnet('magnet_1', -1.25, 3.5, 90, { mode: 1, maxForceNewton: 30, radius: 2.5 }), { id: 'goal_1', type: 'goal', position: [0, 0, 5], rotationYDeg: 0 }],
+    devices: [...floorChain(), magnet('magnet_1', -1.5, 3.5, 90, { mode: 1, maxForceNewton: 40, radius: 2.5 }), { id: 'goal_1', type: 'goal', position: [0, 0, 5], rotationYDeg: 0 }],
     inventory: { magnet: 1 },
     required: ['ball_enter_goal'],
-    solution: [magnet('magnet_2', 1.25, 3.5, 270, { mode: 1, maxForceNewton: 30, radius: 2.5 })],
+    solution: [magnet('magnet_2', 1.5, 3.5, 270, { mode: 1, maxForceNewton: 40, radius: 2.5 })],
   },
   {
     id: '4-5',
