@@ -56,6 +56,8 @@ export interface Machine {
   bugs(): string[];
   /** 球の数が上限に達して、増やせなかったことがあるか */
   ballLimitHit(): boolean;
+  /** いま働いている外の力が、いつか止まるもの（電池・撃つ数の決まった装置）だけか */
+  externalWillStop(kinds: (keyof ExternalInputs)[]): boolean;
 }
 
 export interface VerifyProgress {
@@ -157,6 +159,8 @@ export class PerpetualVerifier {
   private _result: VerifyResult | null = null;
   private rejected = 0;
   private lastReject = '';
+  /** 止まるはずの外の力で候補を捨てた理由（最後まで止まらなければ不成立の理由にする） */
+  private externalReject = '';
   readonly config: VerifyConfig;
 
   constructor(
@@ -210,6 +214,10 @@ export class PerpetualVerifier {
     m.step();
     const t = m.tick;
     if (t >= c.maxSteps) {
+      if (this.externalReject) {
+        this.finish('FAILED', `${this.externalReject}（電池や撃つ数で止まる前に、調べる時間が終わりました）`);
+        return;
+      }
       const why = this.rejected > 0 ? `くり返しに見える所はありましたが、${this.lastReject}が少しずつずれていきました` : 'くり返しが見つかりませんでした（周期が長すぎるか、同じ状態に戻っていません）';
       this.finish('INCONCLUSIVE', `${(c.maxSteps / PHYSICS_HZ).toFixed(0)}秒ぶん調べても判定できませんでした：${why}`);
       return;
@@ -236,25 +244,38 @@ export class PerpetualVerifier {
         if (compareStates(a.state, state, c) !== null) continue;
         const out = m.outputs();
         this.cand = { anchor: a, period, next: t + period, cycles: 1, perCycle: [out - a.outputs], lastOutputs: out };
-        // 1周期目（基準 → 今）で外の力を使っていたら、それ以上は調べない
-        if (this.checkExternal()) return;
-        return;
+        // 1周期目（基準 → 今）で外の力を使っていたら、その候補は使えない
+        if (this.checkExternal()) {
+          if (this._result) return;
+          // 外の力を使っていたころの基準は、もう一致しても使えないので捨てる
+          this.anchors.clear();
+        }
+        break;
       }
     }
     if ((t - c.warmupSteps) % c.snapshotEverySteps === 0) {
       const anchor: Anchor = { tick: t, state, exactKey, sum, outputs: m.outputs(), external: m.external() };
-      const l = list ?? [];
+      const l = this.anchors.get(exactKey) ?? [];
       l.push(anchor);
       this.anchors.set(exactKey, l);
     }
   }
 
   /** 候補の周期の外の力を調べる。使っていたら不成立にして true */
+  /**
+   * 候補の周期の外の力を調べる。使っていたら候補を捨てて true。
+   * 外の力が止まらないもの（電池・撃つ数の無い装置）なら不成立。止まるものなら、止まったあとを調べ続ける（始動, D-45）
+   */
   private checkExternal(): boolean {
     const cand = this.cand!;
     const used = externalDiff(cand.anchor.external, this.machine.external());
     if (used.length === 0) return false;
-    this.finish('FAILED', `くり返し動いていますが、外の力（${used.map((k) => EXTERNAL_TEXT[k]).join('・')}）を使っています。力の源にできるのは隠しバグだけです`, cand.period);
+    const text = `くり返し動いていますが、外の力（${used.map((k) => EXTERNAL_TEXT[k]).join('・')}）を使っています。力の源にできるのは隠しバグだけです`;
+    if (!this.machine.externalWillStop(used)) this.finish('FAILED', text, cand.period);
+    else {
+      this.externalReject = text;
+      this.cand = null;
+    }
     return true;
   }
 

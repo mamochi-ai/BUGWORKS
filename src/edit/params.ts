@@ -153,6 +153,7 @@ export const PARAM_SPECS: Record<DeviceType, readonly ParamSpec[]> = {
         { value: -1, label: '右回り（右へ出す）' },
       ],
     },
+    { key: 'batterySeconds', label: '電池（0 はずっと）', unit: '秒', min: 0, max: 120, step: 10 },
   ],
   magnet: [
     {

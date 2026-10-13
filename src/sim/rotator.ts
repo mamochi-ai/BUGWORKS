@@ -1,5 +1,6 @@
 import { getDeviceDef, type Vec3 } from './catalog';
 import type { PlacedDevice } from './layout';
+import { PHYSICS_DT } from './constants';
 import { add, rotateY } from './railGeometry';
 
 /**
@@ -33,6 +34,8 @@ export const ROTATOR = {
 
 export interface RotatorParams {
   degreesPerSecond: number;
+  /** 電池（秒）。0 はずっと動く。過ぎるとモーターが止まる（試作の設定, D-45） */
+  batterySeconds: number;
   /** +1 左回り（上から見て反時計回り）/ −1 右回り */
   direction: 1 | -1;
 }
@@ -41,8 +44,15 @@ export function rotatorParams(device: PlacedDevice): RotatorParams {
   const p = device.params ?? {};
   return {
     degreesPerSecond: p.degreesPerSecond ?? Number(getDeviceDef('rotator').params.degreesPerSecond),
+    batterySeconds: Math.max(0, p.batterySeconds ?? 0),
     direction: (p.direction ?? 1) < 0 ? -1 : 1,
   };
+}
+
+/** その tick にモーターが動いているか（電池が残っているか） */
+export function rotatorPowered(device: PlacedDevice, tick: number): boolean {
+  const b = rotatorParams(device).batterySeconds;
+  return b === 0 || tick * PHYSICS_DT < b;
 }
 
 /** 装置ローカル → ワールド */

@@ -49,8 +49,8 @@ export const BUG_TUNING = {
   loopPosGrid: 0.05,
   loopSpeedGrid: 0.1,
   loopCatch: 0.25,
-  loopKeepRatio: 0.5,
-  loopKeepDist: 0.15,
+  /** 覚えておける1周の長さの上限（秒） */
+  loopMaxSeconds: 60,
   // BUG-15
   repeatRuns: 7,
   repeatAtTick: 600,

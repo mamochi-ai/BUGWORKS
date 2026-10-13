@@ -17,7 +17,7 @@ describe('回転装置（定義）', () => {
   it('仕様JSONの値（秒速30°）と、試作で追加した球の入口・出口（前・左・右）。軸の入口は使わない', () => {
     const def = getDeviceDef('rotator');
     expect(def.size).toEqual([1.2, 0.55, 1.2]);
-    expect(rotatorParams(rot())).toEqual({ degreesPerSecond: 30, direction: 1 });
+    expect(rotatorParams(rot())).toEqual({ degreesPerSecond: 30, direction: 1, batterySeconds: 0 });
     expect(rolePorts(rot()).map((p) => p.portId)).toEqual(['ball_in', 'ball_out', 'ball_left_out', 'ball_right_out']);
   });
 
@@ -44,7 +44,7 @@ describe('回転装置（定義）', () => {
   });
 
   it('設定：回る速さ・回る向き。元に戻せる。スイッチから配線できる', () => {
-    expect(PARAM_SPECS.rotator.map((s) => s.key)).toEqual(['degreesPerSecond', 'direction']);
+    expect(PARAM_SPECS.rotator.map((s) => s.key)).toEqual(['degreesPerSecond', 'direction', 'batterySeconds']);
     const ed = new EditorModel(ROTATOR_SAMPLE_LAYOUT.devices, 1);
     expect(ed.setParam('rotator_1', 'direction', -1)).toBe(true);
     expect(paramValue(ed.devices.find((d) => d.id === 'rotator_1')!, 'direction')).toBe(-1);
@@ -96,7 +96,37 @@ describe('回転装置（物理）', () => {
     expect(s.snapshot().rotators[0].angle).toBe(0);
   });
 
-  it('配線なしなら回り続け、球は入口で待ってから左へ出る。右回りなら右へ', () => {
+  it('電池（D-45）：決まった秒数が過ぎるとモーターが止まり、台はその向きのまま動かない。0 はずっと動く', () => {
+    expect(rotatorParams({ id: 'r', type: 'rotator', position: [0, 0, 0], rotationYDeg: 0 }).batterySeconds).toBe(0);
+    const bat = withoutSwitchWire.map((d) => (d.type === 'rotator' ? { ...d, params: { ...d.params, batterySeconds: 2 } } : d));
+    const s = run(bat, 2.5);
+    const a = s.rotatorAngles().get('rotator_1')!;
+    expect(a).toBeGreaterThan(0);
+    for (let i = 0; i < PHYSICS_HZ; i++) s.step();
+    expect(s.rotatorAngles().get('rotator_1')).toBe(a);
+    const forever = run(withoutSwitchWire, 2.5);
+    const b = forever.rotatorAngles().get('rotator_1')!;
+    for (let i = 0; i < PHYSICS_HZ; i++) forever.step();
+    expect(forever.rotatorAngles().get('rotator_1')).toBeGreaterThan(b);
+  });
+
+  it('送り出した球は、すべらずに転がる回り方で出る（速さが落ちない）', () => {
+    const s = new Simulation(R, { seed: 404, devices: [...withoutSwitchWire] });
+    sims.push(s);
+    let released: number | null = null;
+    for (let i = 0; i < PHYSICS_HZ * 10 && released === null; i++) {
+      const before = s.snapshot().rotators[0].releases;
+      s.step();
+      if (s.snapshot().rotators[0].releases > before) released = s.tick;
+    }
+    expect(released).not.toBeNull();
+    for (let i = 0; i < 12; i++) s.step(); // 0.1 秒後
+    // 送り出した球（いちばん速い球）は、0.1 秒たっても送り出しの速さに近い（すべると 5/7 ほどに落ちる）
+    const fastest = Math.max(...s.readBalls().map((x) => Math.hypot(...x.linvel)));
+    expect(fastest).toBeGreaterThan(ROTATOR.releaseSpeed * 0.85);
+  });
+
+    it('配線なしなら回り続け、球は入口で待ってから左へ出る。右回りなら右へ', () => {
     const s = run(withoutSwitchWire, 10);
     expect(hits(s).goal_1).toBe(0);
     expect(hits(s).goal_2).toBeGreaterThanOrEqual(2);

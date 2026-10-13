@@ -5,7 +5,7 @@ import { canonicalBlueprint, makeCertificate, DISCLAIMER } from '../src/perpetua
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import type { PlacedDevice } from '../src/sim/layout';
 import { FLOOR_CHAIN } from './fixtures';
-import { rotatorRing } from './loops';
+import { batteryRing, rotatorRing } from './loops';
 
 /**
  * 永久機関の検証（D-41）。判定の流れは作り物の機械で、物理とのつなぎは本物のシミュレーションで確かめる。
@@ -19,12 +19,13 @@ class FakeMachine implements Machine {
   ext: ExternalInputs = { launcher: 0, spring: 0, rotator: 0, magnet: 0 };
   out = 0;
   constructor(
-    private readonly opts: { period: number; drift?: number; outputEvery?: number; externalEvery?: number; still?: boolean; limit?: boolean; balls?: number },
+    private readonly opts: { period: number; drift?: number; outputEvery?: number; externalEvery?: number; externalUntil?: number; still?: boolean; limit?: boolean; balls?: number },
   ) {}
   step(): void {
     this.tick++;
     if (this.opts.outputEvery && this.tick % this.opts.outputEvery === 0) this.out++;
-    if (this.opts.externalEvery && this.tick % this.opts.externalEvery === 0) this.ext = { ...this.ext, rotator: this.ext.rotator + 1 };
+    const until = this.opts.externalUntil ?? Infinity;
+    if (this.opts.externalEvery && this.tick < until && this.tick % this.opts.externalEvery === 0) this.ext = { ...this.ext, rotator: this.ext.rotator + 1 };
   }
   state(): MachineState {
     const p = this.opts.period;
@@ -49,6 +50,9 @@ class FakeMachine implements Machine {
   }
   ballLimitHit(): boolean {
     return !!this.opts.limit;
+  }
+  externalWillStop(): boolean {
+    return this.opts.externalUntil !== undefined;
   }
 }
 
@@ -91,6 +95,15 @@ describe('永久機関の検証（判定の流れ）', () => {
     const r = run(new FakeMachine({ period: 80, outputEvery: 80, externalEvery: 40 }));
     expect(r.status).toBe('FAILED');
     expect(r.reason).toContain('回転台');
+  });
+
+  it('止まる外の力（電池など）は始動とみなし、止まったあとに調べて認定できる。止まる前に時間切れなら不成立', () => {
+    const r = run(new FakeMachine({ period: 80, outputEvery: 80, externalEvery: 40, externalUntil: 1000 }));
+    expect(r.status, r.reason).toBe('VERIFIED');
+    expect(r.tick).toBeGreaterThan(1000);
+    const late = run(new FakeMachine({ period: 80, outputEvery: 80, externalEvery: 40, externalUntil: 1e9 }));
+    expect(late.status).toBe('FAILED');
+    expect(late.reason).toContain('回転台');
   });
 
   it('少しずつずれていく（見かけのくり返し）は認定しない → 時間切れで判定できない', () => {
@@ -143,6 +156,18 @@ describe('永久機関の検証（物理）', () => {
     const r = verify(FLOOR_CHAIN.devices, { maxSteps: 6000 });
     expect(r.status).not.toBe('VERIFIED');
   });
+
+  it('電池つきの回転台の輪：電池が切れたあとは隠しバグだけで回り、羽根車を回し続けるので認定（D-45）', () => {
+    const r = verify(batteryRing(60));
+    expect(r.status).toBe('VERIFIED');
+    expect(r.bugs).toEqual(['BUG-03']);
+    expect(r.outputEventsPerCycle).toEqual([1, 1, 1]);
+    expect(r.tick).toBeGreaterThan(60 * 120); // 電池が切れたあと
+    // 電池なし（ずっと動く）なら不成立
+    const forever = verify(batteryRing(0));
+    expect(forever.status).toBe('FAILED');
+    expect(forever.reason).toContain('回転台');
+  }, 120_000);
 
   it('回転台の輪（隠しバグも起きる）でも、回転台のモーターは外の力なので不成立', () => {
     const r = verify(rotatorRing());

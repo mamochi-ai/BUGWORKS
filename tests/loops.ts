@@ -37,3 +37,28 @@ export function rotatorRing(): PlacedDevice[] {
   const r4 = out.find((d) => d.id === 'rail_4')!;
   return [{ id: 'launcher_1', type: 'launcher', position: [r4.position[0], 0, r4.position[2] - 3], rotationYDeg: 0, params: { angleDegrees: 0, launchSpeed: 3, shots: 1 } }, ...out];
 }
+
+/**
+ * 電池つきの回転台4台の輪（羽根車つき）。電池が切れるまでは回転台が球を回し、そのあとは隠しバグだけで回る（D-45 の確認用）。
+ * 羽根車で 0.1m 下がる分は、最後の1mの上り坂で取り戻す。
+ */
+export function batteryRing(batterySeconds: number): PlacedDevice[] {
+  const P = { degreesPerSecond: 90, batterySeconds };
+  const y0 = 0.3;
+  const out: PlacedDevice[] = [];
+  const r1: PlacedDevice = { id: 'rotator_1', type: 'rotator', position: [-1.5, y0, 1.5], rotationYDeg: 0, params: P };
+  const pad = attach(r1, 'ball_left_out', { id: 'paddle_1', type: 'paddle' });
+  const ra = attach(pad, 'ball_out', { id: 'rail_1', type: 'rail', params: { slopeMeters: 0, lengthMeters: 1 } });
+  out.push(r1, pad, ra);
+  let prev = attach(ra, 'ball_out', { id: 'rotator_2', type: 'rotator', params: P });
+  out.push(prev);
+  for (const i of [2, 3]) {
+    const rail = attach(prev, 'ball_left_out', { id: `rail_${i}`, type: 'rail', params: { slopeMeters: 0 } });
+    prev = attach(rail, 'ball_out', { id: `rotator_${i + 1}`, type: 'rotator', params: P });
+    out.push(rail, prev);
+  }
+  const up = attach(prev, 'ball_left_out', { id: 'rail_4', type: 'rail', params: { slopeMeters: -0.1, lengthMeters: 1 } });
+  const last = attach(up, 'ball_out', { id: 'rail_5', type: 'rail', params: { slopeMeters: 0, lengthMeters: 1 } });
+  out.push(up, last);
+  return [{ id: 'launcher_1', type: 'launcher', position: [last.position[0], y0, last.position[2] - 3.5], rotationYDeg: 0, params: { angleDegrees: 0, launchSpeed: 3, shots: 1 } }, ...out];
+}
