@@ -13,7 +13,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   page.on('console', m => { if (m.type() === 'error') errors.push('desktop console: ' + m.text()); });
   await page.goto(url);
   await page.waitForFunction(() => window.__bugworks);
-  await page.getByRole('button', { name: '自由研究' }).click(); // 起動時のステージ選択を閉じる
+  await page.getByRole('button', { name: 'ゲーム開始' }).click(); await page.getByRole('button', { name: '自由研究' }).click(); // 起動時のステージ選択を閉じる
   await page.waitForTimeout(500);
   await page.screenshot({ path: out + '/desktop_initial.png' });
   console.log('initial', await simState(page));
@@ -46,7 +46,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   ip.on('pageerror', e => errors.push('ipad: ' + e.message));
   await ip.goto(url);
   await ip.waitForFunction(() => window.__bugworks);
-  await ip.getByRole('button', { name: '自由研究' }).tap();
+  await ip.getByRole('button', { name: 'ゲーム開始' }).tap(); await ip.getByRole('button', { name: '自由研究' }).tap();
   await ip.waitForTimeout(500);
   const cdp = await ctx.newCDPSession(ip);
   const touch = async (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x,y],i)=>({x,y,id:i})) });
@@ -79,7 +79,7 @@ const simState = (p) => p.evaluate(() => { const b = window.__bugworks; return {
   await ctx.close(); // 前のページを閉じてから次を開く（ソフトウェア描画でCPUを奪い合わないように）
   // ---- iPad Mini（縦向き）のレイアウト確認
   const ctx2 = await browser.newContext({ ...devices['iPad Mini'] });
-  const pm = await ctx2.newPage(); pm.setDefaultTimeout(120000); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.getByRole('button', { name: '自由研究' }).tap(); await pm.waitForTimeout(400);
+  const pm = await ctx2.newPage(); pm.setDefaultTimeout(120000); await pm.goto(url); await pm.waitForFunction(() => window.__bugworks, null, { timeout: 120000 }); await pm.getByRole('button', { name: 'ゲーム開始' }).tap(); await pm.getByRole('button', { name: '自由研究' }).tap(); await pm.waitForTimeout(400);
   await pm.screenshot({ path: out + '/ipad_mini_portrait.png' });
   console.log('errors:', errors.length ? errors : 'none');
   await browser.close();

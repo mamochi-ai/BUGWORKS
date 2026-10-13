@@ -12,7 +12,7 @@ const url = process.env.BUGWORKS_URL || 'http://localhost:5173/';
     p.on('pageerror', (e) => errors.push(name + ': ' + e.message));
     await p.goto(url);
     await p.waitForFunction(() => window.__bugworks);
-    await p.getByRole('button', { name: '自由研究' }).click();
+    await p.getByRole('button', { name: 'ゲーム開始' }).click(); await p.getByRole('button', { name: '自由研究' }).click();
     await p.waitForTimeout(300);
     await p.screenshot({ path: `${out}/${name}_top.png` });
     // 止まる機械（1球だけ撃ってゴール）で検証 → 不成立（止まっている）

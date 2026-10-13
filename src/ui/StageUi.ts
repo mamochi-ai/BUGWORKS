@@ -32,6 +32,7 @@ export class StageUi {
     const select = document.createElement('div');
     select.className = 'stage-modal';
     select.dataset.k = 'select';
+    select.hidden = true;
     select.innerHTML = `
       <div class="stage-dialog" role="dialog" aria-modal="true" aria-labelledby="stage-select-title">
         <h2 id="stage-select-title">ステージ選択</h2>
@@ -84,8 +85,14 @@ export class StageUi {
     });
     this.renderList();
     this.sync();
-    // 起動直後はステージ選択から始める（閉じるボタンはまだ出さない）
-    this.el.closeSelect.hidden = true;
+  }
+
+  /** ステージ選択を開く（タイトル画面の「ゲーム開始」から。閉じずに選ぶ／自由研究を押す） */
+  showSelect(fromTitle = false): void {
+    this.el.clear.hidden = true;
+    this.renderList();
+    this.el.closeSelect.hidden = fromTitle;
+    this.el.select.hidden = false;
   }
 
   private run(action: string, id?: string): void {

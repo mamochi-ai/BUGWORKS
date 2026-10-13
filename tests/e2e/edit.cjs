@@ -8,7 +8,7 @@ const out = process.argv[2] || '.';
   const p = await ctx.newPage(); const errs = []; p.setDefaultTimeout(120000); // ソフトウェア描画では1コマが重いので待ち時間を長めに
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type()==='error' && errs.push(m.text()));
   await p.goto(process.env.BUGWORKS_URL || 'http://localhost:5173/'); await p.waitForFunction(() => window.__bugworks, null, { timeout: 60000 });
-  await p.getByRole('button', { name: '自由研究' }).tap(); // 起動時のステージ選択を閉じる
+  await p.getByRole('button', { name: 'ゲーム開始' }).tap(); await p.getByRole('button', { name: '自由研究' }).tap(); // 起動時のステージ選択を閉じる
   await p.waitForTimeout(500);
   const cdp = await ctx.newCDPSession(p);
   const touch = async (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x,y],i)=>({x,y,id:i})) });

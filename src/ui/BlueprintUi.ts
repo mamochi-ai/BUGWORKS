@@ -71,7 +71,7 @@ export class BlueprintUi {
     (this.el.file as HTMLInputElement).addEventListener('change', () => this.readFile());
   }
 
-  private show(): void {
+  show(): void {
     const st = this.stage.current;
     (this.el.name as HTMLInputElement).value = st ? `ステージ${st.id} ${st.name}` : '自由研究の設計図';
     this.say('', 'info');
