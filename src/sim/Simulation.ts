@@ -13,7 +13,7 @@ import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel, magnetParams } from './magnet';
 import { BUG_TUNING, closedLoops, facingRepelPairs, loopKey, onFloor, seeded, slickDirection, wornFrictionFactor, type BugArm, type BugTrigger, type LoopCheckpoint, type MagnetPair } from './bugs';
 import { inSwitchZone, signalSources } from './switch';
-import { ROTATOR, alignedWithEntry, atRotatorEntry, exitFor, rotatorParams, rotatorToLocal, rotatorToWorld, travelDir } from './rotator';
+import { ROTATOR, alignedWithEntry, atRotatorEntry, exitFor, rotatorParams, rotatorPowered, rotatorToLocal, rotatorToWorld, travelDir } from './rotator';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
 import { BALL_RADIUS, RAIL_PROFILE, add, buildRailTrack, rotateY, type RailTrack } from './railGeometry';
 
@@ -107,6 +107,16 @@ export interface RotatorState {
   releases: number;
 }
 
+/** BUG-03：球ごと・輪ごとの記録。traj があれば効果中（覚えた1周を k 番目からくり返す） */
+interface LoopLap {
+  key: string;
+  count: number;
+  /** 前に見張り地点を通ってからの状態（長すぎたら null） */
+  buf: BallState[] | null;
+  traj: BallState[] | null;
+  k: number;
+}
+
 export interface SimSnapshot {
   tick: number;
   paddles: PaddleState[];
@@ -192,7 +202,7 @@ export class Simulation {
   // BUG-03：閉じたレールの見張り地点と、球ごとの記録
   private loops: LoopCheckpoint[] = [];
   private loopSide = new Map<string, number>();
-  private loopLaps = new Map<string, { key: string; count: number; saved: BallState | null; active: boolean }>();
+  private loopLaps = new Map<string, LoopLap>();
   // BUG-15・BUG-30：再生ごとに外から準備される（arm）。リセットで消える
   private arm: BugArm = {};
   private branchUsed = false;
@@ -457,6 +467,7 @@ export class Simulation {
     if (sp.phase === 'ready') {
       const held = new Set(this.springs.map((x) => x.heldBallId).filter((id) => id !== null));
       for (const l of this.launchers) if (l.loadedBallId !== null) held.add(l.loadedBallId);
+      for (const b of this.balls) if (this.looping(b.id)) held.add(b.id);
       const candidate = this.balls.find((b) => {
         if (held.has(b.id)) return false;
         const p = b.body.translation();
@@ -824,6 +835,7 @@ export class Simulation {
     const busy = new Set<number>();
     for (const l of this.launchers) if (l.loadedBallId !== null) busy.add(l.loadedBallId);
     for (const sp of this.springs) if (sp.heldBallId !== null) busy.add(sp.heldBallId);
+    for (const b of this.balls) if (this.looping(b.id)) busy.add(b.id);
     for (const r of this.rotators) {
       for (const id of r.queue) busy.add(id);
       if (r.riding) busy.add(r.riding.ballId);
@@ -835,13 +847,16 @@ export class Simulation {
       const w = rotatorToWorld(r.device, local);
       b.body.setTranslation({ x: w[0], y: w[1], z: w[2] }, true);
       b.body.setLinvel({ x: v[0], y: v[1], z: v[2] }, true);
-      b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      // 送り出すときは、すべらずに転がる回り方にする（ω = 上向き × v / 半径。D-45）
+      b.body.setAngvel({ x: v[2] / BALL_RADIUS, y: 0, z: -v[0] / BALL_RADIUS }, true);
     };
     for (const r of this.rotators) {
       const { degreesPerSecond, direction } = rotatorParams(r.device);
       // 信号が ON（配線なしなら常に）の間は回る。OFF になったら、まっすぐの向き（180°ごと）まで回ってから止まる
       let dA = direction * ((degreesPerSecond * Math.PI) / 180) * dt;
       if (!this.signalOn(r.deviceId)) dA = parkStep(r.angle, dA);
+      // 電池（D-45）：決まった時間が過ぎたらモーターが止まり、台はその向きのまま動かない
+      if (!rotatorPowered(r.device, this._tick)) dA = 0;
       // 入口に来た球を列に並べる
       for (const b of this.balls) {
         if (busy.has(b.id)) continue;
@@ -990,52 +1005,57 @@ export class Simulation {
 
   /**
    * BUG-03 の判定と効果（条件は開発用資料。球の状態は量子化して比べる）。
-   * 効果：見張り地点で覚えた球の状態に戻して、周回の損失を打ち消す。覚えた状態から離れすぎていたら効果は終わる（安全策）。
+   * 効果：直前の1周の球の状態を覚え、次からはその1周をそのままくり返す（周回の損失を打ち消す。D-45）。
+   * くり返し中の球は、ほかの装置（回転台・バネ）につかまれない。ゴールに入る・場外に落ちると終わる。
    */
   private detectLoops(): void {
     const T = BUG_TUNING;
+    const maxTicks = Math.round(T.loopMaxSeconds / PHYSICS_DT);
     this.loops.forEach((cp, li) => {
       for (const b of this.balls) {
-        const t = b.body.translation();
-        const p: Vec3 = [t.x, t.y, t.z];
+        const key = `${li}:${b.id}`;
+        const lap = this.loopLaps.get(key) ?? { key: '', count: 0, buf: null, traj: null, k: 0 };
+        this.loopLaps.set(key, lap);
+        if (lap.traj) {
+          lap.k = (lap.k + 1) % lap.traj.length;
+          setBody(b.body, lap.traj[lap.k]);
+          continue;
+        }
+        if (this.looping(b.id)) continue;
+        const now = readBody(b.body);
+        const p = now.position;
         const rel: Vec3 = [p[0] - cp.at[0], p[1] - cp.at[1], p[2] - cp.at[2]];
         const along = rel[0] * cp.dir[0] + rel[2] * cp.dir[2];
         const off = Math.hypot(rel[0] - along * cp.dir[0], rel[2] - along * cp.dir[2], rel[1]);
-        const key = `${li}:${b.id}`;
         const prev = this.loopSide.get(key);
         this.loopSide.set(key, along);
-        if (prev === undefined || !(prev < 0 && along >= 0) || off > T.loopCatch) continue;
-        const now = readBody(b.body);
-        const k = loopKey(cp, p, now.linvel);
-        const lap = this.loopLaps.get(key) ?? { key: '', count: 0, saved: null, active: false };
-        if (lap.active && lap.saved) {
-          const s = lap.saved;
-          const v0 = Math.hypot(...s.linvel);
-          const v1 = Math.hypot(...now.linvel);
-          const d = Math.hypot(p[0] - s.position[0], p[1] - s.position[1], p[2] - s.position[2]);
-          if (Math.abs(v1 - v0) > v0 * T.loopKeepRatio || d > T.loopKeepDist) {
-            lap.active = false;
-            lap.count = 0;
-            lap.key = '';
-          } else {
-            b.body.setTranslation({ x: s.position[0], y: s.position[1], z: s.position[2] }, true);
-            b.body.setRotation({ x: s.rotation[0], y: s.rotation[1], z: s.rotation[2], w: s.rotation[3] }, true);
-            b.body.setLinvel({ x: s.linvel[0], y: s.linvel[1], z: s.linvel[2] }, true);
-            b.body.setAngvel({ x: s.angvel[0], y: s.angvel[1], z: s.angvel[2] }, true);
+        const crossed = prev !== undefined && prev < 0 && along >= 0 && off <= T.loopCatch;
+        if (!crossed) {
+          if (lap.buf) {
+            lap.buf.push(now);
+            if (lap.buf.length > maxTicks) lap.buf = null;
           }
-          this.loopLaps.set(key, lap);
           continue;
         }
+        const k = loopKey(cp, p, now.linvel);
         lap.count = lap.key === k ? lap.count + 1 : 1;
         lap.key = k;
-        if (lap.count >= T.loopLaps) {
-          lap.active = true;
-          lap.saved = now;
+        if (lap.count >= T.loopLaps && lap.buf && lap.buf.length > 1) {
+          lap.traj = lap.buf;
+          lap.k = 0;
+          lap.buf = null;
           if (!this.bugTriggers.some((x) => x.id === 'BUG-03')) this.bugTriggers.push({ id: 'BUG-03', tick: this._tick, at: [...cp.at] });
+          continue;
         }
-        this.loopLaps.set(key, lap);
+        lap.buf = [now];
       }
     });
+  }
+
+  /** BUG-03 の効果で1周をくり返している球か */
+  private looping(ballId: number): boolean {
+    for (const [k, lap] of this.loopLaps) if (lap.traj && k.endsWith(`:${ballId}`)) return true;
+    return false;
   }
 
   /** この再生の要約（配置と、決まった tick での球・装置の状態）。まだその tick に達していなければ null */
@@ -1075,6 +1095,13 @@ export class Simulation {
     return { ...this.external };
   }
 
+  /** 永久機関の検証用：この種類の外の力が、いつか止まるか（回転台は電池、発射機は撃つ数。バネ・磁石は止まらない） */
+  externalWillStop(kind: 'launcher' | 'spring' | 'rotator' | 'magnet'): boolean {
+    if (kind === 'rotator') return this.rotators.every((r) => !rotatorPowered(r.device, this._tick) || rotatorParams(r.device).batterySeconds > 0);
+    if (kind === 'launcher') return this.launchers.every((l) => l.params.shots > 0);
+    return false;
+  }
+
   /** 永久機関の検証用：出力の回数（羽根車を回した球・スイッチの切り替え） */
   outputEvents(): number {
     return this.paddles.reduce((n, p) => n + p.passes, 0) + this.switches.reduce((n, s) => n + s.toggles, 0);
@@ -1089,7 +1116,8 @@ export class Simulation {
   verifierState(): { balls: number[][]; exact: number[]; approx: number[] } {
     const balls = this.balls.map((b) => {
       const s = readBody(b.body);
-      const lapKeys = this.loops.map((_, li) => this.loopLaps.get(`${li}:${b.id}`));
+      const laps = this.loops.map((_, li) => this.loopLaps.get(`${li}:${b.id}`));
+      const active = laps.find((l) => l?.traj);
       return [
         ...s.position,
         ...s.rotation,
@@ -1097,7 +1125,8 @@ export class Simulation {
         ...s.angvel,
         this.stillTicks.get(b.id) ?? 0,
         this.slick.get(b.id)?.left ?? 0,
-        lapKeys.filter((l) => l?.active).length,
+        active ? 1 : 0,
+        active ? active.k : -1,
       ];
     });
     const exact: number[] = [this.balls.length];
@@ -1107,7 +1136,7 @@ export class Simulation {
       const spent = l.params.shots > 0 && l.fired >= l.params.shots;
       exact.push(l.loadedBallId === null ? 0 : 1, spent ? -1 : Math.max(0, l.nextFireTick - this._tick), ['max_balls', 'loading', null].indexOf(l.waiting));
     }
-    for (const r of this.rotators) exact.push(r.queue.length, r.riding ? (r.riding.phase === 'slide' ? 1 : 2) : 0);
+    for (const r of this.rotators) exact.push(r.queue.length, r.riding ? (r.riding.phase === 'slide' ? 1 : 2) : 0, rotatorPowered(r.device, this._tick) ? 1 : 0);
     for (const p of this.paddles) exact.push(p.inside.size);
     for (const q of this.magnetPairs) exact.push(q.flipped ? 1 : 0, q.centerTicks);
     for (const track of this.tracks) exact.push(wornFrictionFactor(this.railPasses.get(track.deviceId) ?? 0));
@@ -1266,6 +1295,13 @@ export function quatFromYawPitch(yaw: number, pitch: number): { x: number; y: nu
   const cp = Math.cos(pitch / 2);
   const sp = Math.sin(pitch / 2);
   return { x: cy * sp, y: sy * cp, z: -sy * sp, w: cy * cp };
+}
+
+function setBody(body: RigidBody, s: BallState): void {
+  body.setTranslation({ x: s.position[0], y: s.position[1], z: s.position[2] }, true);
+  body.setRotation({ x: s.rotation[0], y: s.rotation[1], z: s.rotation[2], w: s.rotation[3] }, true);
+  body.setLinvel({ x: s.linvel[0], y: s.linvel[1], z: s.linvel[2] }, true);
+  body.setAngvel({ x: s.angvel[0], y: s.angvel[1], z: s.angvel[2] }, true);
 }
 
 function readBody(body: RigidBody): BallState {

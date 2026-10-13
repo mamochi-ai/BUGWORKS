@@ -41,6 +41,10 @@ export class SimMachine implements Machine {
     return this.limitHit;
   }
 
+  externalWillStop(kinds: (keyof ExternalInputs)[]): boolean {
+    return kinds.every((k) => this.sim.externalWillStop(k));
+  }
+
   dispose(): void {
     this.sim.dispose();
   }
