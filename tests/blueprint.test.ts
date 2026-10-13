@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { BLUEPRINT_SCHEMA_VERSION, MAX_BLUEPRINT_CHARS, blueprintToJson, cleanTitle, fileNameFor, parseBlueprint, toBlueprint } from '../src/blueprint/blueprint';
 import { MAX_SAVED, listSaved, removeSaved, saveBlueprint } from '../src/blueprint/store';
 import { EditorModel } from '../src/edit/EditorModel';
-import { findConnections } from '../src/edit/placement';
+import { PLACEMENT, findConnections } from '../src/edit/placement';
 import { PHYSICS_HZ, PHYSICS_PROFILE } from '../src/sim/constants';
 import * as layouts from '../src/sim/layout';
 import type { PlacedDevice, SliceLayout } from '../src/sim/layout';
@@ -80,7 +80,7 @@ describe('設計図JSON（読み込みの検査）', () => {
   });
 
   it('装置の数の上限を超えるものは断る', () => {
-    const many = Array.from({ length: 41 }, (_, i) => ({ ...rail, id: `rail_${i + 1}`, position: [(i % 6) - 3, 0.4, Math.floor(i / 6) - 3] as PlacedDevice['position'] }));
+    const many = Array.from({ length: PLACEMENT.maxDevices + 1 }, (_, i) => ({ ...rail, id: `rail_${i + 1}`, position: [(i % 6) - 3, 0.4, Math.floor(i / 6) - 3] as PlacedDevice['position'] }));
     expect(errorsOf(json(many))).toContain('多すぎます');
   });
 

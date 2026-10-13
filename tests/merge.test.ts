@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeLayouts, nextNamespace, renameWithNamespace } from '../src/blueprint/merge';
-import { conflicts, findConnections } from '../src/edit/placement';
+import { PLACEMENT, conflicts, findConnections } from '../src/edit/placement';
 import { MAGNET_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, type PlacedDevice } from '../src/sim/layout';
 import { portWorldPosition } from '../src/sim/railGeometry';
 import { FLOOR_CHAIN } from './fixtures';
@@ -46,7 +46,7 @@ describe('設計図の連結（D-38）', () => {
 
   it('装置が多すぎる・置ける場所がないときは理由付きで断る', () => {
     const rails = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `rail_${i + 1}`, type: 'rail', position: [(i % 6) * 1.5 - 4, 0.4, Math.floor(i / 6) * 2 - 4], rotationYDeg: 0 }) as PlacedDevice);
-    const tooMany = mergeLayouts(rails(36), MAGNET_SAMPLE_LAYOUT.devices, 404);
+    const tooMany = mergeLayouts(rails(PLACEMENT.maxDevices - MAGNET_SAMPLE_LAYOUT.devices.length + 1), MAGNET_SAMPLE_LAYOUT.devices, 404);
     expect(tooMany.ok).toBe(false);
     if (!tooMany.ok) expect(tooMany.errors[0]).toContain('多すぎます');
     const noRoom = mergeLayouts(rails(30), MAGNET_SAMPLE_LAYOUT.devices.concat(FLOOR_CHAIN.devices.map((d) => ({ ...d, id: `x_${d.id}` }))), 404);
