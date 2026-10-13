@@ -352,7 +352,7 @@ html, body {
   font-size: clamp(40px, 5.4vw, 66px); white-space: nowrap; font-weight: 900; letter-spacing: 0.02em; color: #eaf6ff;
   text-shadow: 0 0 6px #3fd4ff, 0 0 22px rgba(63, 212, 255, 0.7), 0 3px 0 #1a4a66;
 }
-.title-logo small { margin-top: 8px; font-size: 15px; font-weight: 800; letter-spacing: 0.4em; color: var(--orange); }
+.title-logo small { margin-top: 10px; font-size: 22px; font-weight: 800; letter-spacing: 0.3em; color: var(--orange); }
 .title-buttons { display: flex; flex-direction: column; gap: 10px; }
 .title-buttons button {
   min-height: 52px; border-radius: 12px; border: 1px solid #3f6b8a; color: #e6f2ff; font-size: 18px; font-weight: 800; letter-spacing: 0.06em;

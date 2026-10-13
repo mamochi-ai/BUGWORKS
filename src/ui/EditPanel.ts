@@ -1,5 +1,6 @@
 import type { EditorModel } from '../edit/EditorModel';
 import { getDeviceDef } from '../sim/catalog';
+import { FULL_SAMPLE_LAYOUT } from '../sim/fullSample';
 import { GEAR_SAMPLE_LAYOUT, LOOP_SAMPLE_LAYOUT, MAGNET_SAMPLE_LAYOUT, RAIL_SAMPLE_LAYOUT, ROTATOR_SAMPLE_LAYOUT, SWITCH_SAMPLE_LAYOUT, VERTICAL_SLICE_LAYOUT, type DeviceType } from '../sim/layout';
 import { restsOnSurface } from '../edit/placement';
 
@@ -82,6 +83,7 @@ export class EditPanel {
           <button type="button" data-e="sample-rails">いろいろなレール</button>
           <button type="button" data-e="sample-rotator">回転台で分ける</button>
           <button type="button" data-e="sample-loop">ループと上り坂</button>
+          <button type="button" data-e="sample-full">全部のせ（99個）</button>
         </div>
       </div>
     `;
@@ -199,6 +201,9 @@ export class EditPanel {
         break;
       case 'sample-rotator':
         editor.loadLayout(ROTATOR_SAMPLE_LAYOUT.devices, 'サンプル「回転台で分ける」を読み込みました。スイッチが ON の間は左へ、OFF の間はまっすぐ出します');
+        break;
+      case 'sample-full':
+        editor.loadLayout(FULL_SAMPLE_LAYOUT.devices, 'サンプル「全部のせ」を読み込みました。7本のレーンに装置を99個並べています（重さの確認にも）');
         break;
       case 'sample-loop':
         editor.loadLayout(LOOP_SAMPLE_LAYOUT.devices, 'サンプル「ループと上り坂」を読み込みました。坂で勢いをつけてループを1周し、上り坂と斜めのレールを通ります');

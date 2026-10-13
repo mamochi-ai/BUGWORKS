@@ -48,7 +48,7 @@ export class TitleUi {
     box.setAttribute('aria-labelledby', 'title-logo');
     box.innerHTML = `
       <div class="title-menu">
-        <h1 id="title-logo" class="title-logo"><span>仕様です。</span><small>BUGWORKS</small></h1>
+        <h1 id="title-logo" class="title-logo"><span>BUGWORKS</span><small>仕様です。</small></h1>
         <nav class="title-buttons" aria-label="メインメニュー">
           <button type="button" data-t="start" class="primary">ゲーム開始</button>
           <button type="button" data-t="blueprint">設計図を読み込む</button>
