@@ -48,6 +48,14 @@ export class CameraRig {
     window.addEventListener('blur', () => this.keys.clear());
   }
 
+  /** 最初の視点の方位角（rad。注視点から見たカメラの向き） */
+  static readonly HOME_AZIMUTH = Math.atan2(HOME.position.x - HOME.target.x, HOME.position.z - HOME.target.z);
+
+  /** いまの方位角（rad） */
+  azimuth(): number {
+    return this.controls.getAzimuthalAngle();
+  }
+
   home(): void {
     this.camera.position.copy(HOME.position);
     this.controls.target.copy(HOME.target);

@@ -9,11 +9,12 @@ import { rotateY } from './railGeometry';
  * 隠しバグ（意図して仕込んだ例外法則, マスター仕様 §4 / DECISIONS.md D-37）。
  * マスター仕様 §10 の手順3「まず3種だけ」に従い、今ある装置で起こせる3種を実装した（D-37）。
  * そのあと BUG-03・BUG-15・BUG-30 を足した（D-42。2026-10-12 ユーザー判断）。
+ * さらに BUG-01・BUG-20・BUG-23・BUG-27 を足した（D-46。2026-10-13 ユーザー判断）。BUG-27 は画面の出来事なので src/ui 側で扱う。
  * 発動の条件・効果は開発用資料（リポジトリ外, spec/private）の各IDに従う。条件の文章はゲームの画面・保存ファイルに出さない。
  * どれも物理の状態だけで決まり、同じ配置なら毎回同じ tick で発動する（決定論）。
  */
-export type BugId = 'BUG-03' | 'BUG-12' | 'BUG-15' | 'BUG-16' | 'BUG-18' | 'BUG-30';
-export const IMPLEMENTED_BUGS: readonly BugId[] = ['BUG-03', 'BUG-12', 'BUG-15', 'BUG-16', 'BUG-18', 'BUG-30'];
+export type BugId = 'BUG-01' | 'BUG-03' | 'BUG-12' | 'BUG-15' | 'BUG-16' | 'BUG-18' | 'BUG-20' | 'BUG-23' | 'BUG-27' | 'BUG-30';
+export const IMPLEMENTED_BUGS: readonly BugId[] = ['BUG-01', 'BUG-03', 'BUG-12', 'BUG-15', 'BUG-16', 'BUG-18', 'BUG-20', 'BUG-23', 'BUG-27', 'BUG-30'];
 
 export interface BugTrigger {
   id: BugId;
@@ -60,7 +61,62 @@ export const BUG_TUNING = {
   watchSpringFactor: 1.3,
   watchReleaseFactor: 2,
   watchMagnetTicks: 120,
+  // BUG-01
+  cornerReach: 0.02,
+  cornerHits: 3,
+  cornerSpeedRatio: 0.05,
+  cornerMinSpeed: 0.3,
+  // BUG-20
+  mazeIgnoreSeconds: 1,
+  // BUG-23
+  swapDelaySeconds: 0.5,
+  // BUG-27
+  flipDegrees: 150,
 } as const;
+
+/** 角（BUG-01）：箱の形の装置の外形の、縦の角。固定の座標で決める */
+export interface Corner {
+  x: number;
+  z: number;
+  minY: number;
+  maxY: number;
+}
+
+/** 箱の形の装置（台・歯車装置・軸・磁石）の外形の4隅 */
+export function boxCorners(boxes: readonly { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number }[]): Corner[] {
+  const out: Corner[] = [];
+  for (const f of boxes) for (const x of [f.minX, f.maxX]) for (const z of [f.minZ, f.maxZ]) out.push({ x, z, minY: f.minY, maxY: f.maxY });
+  return out;
+}
+
+/** 球（中心 p）が角に触れているか */
+export function touchingCorner(c: Corner, p: Vec3, radius: number): boolean {
+  return Math.hypot(p[0] - c.x, p[2] - c.z) <= radius + BUG_TUNING.cornerReach && p[1] >= c.minY - radius && p[1] <= c.maxY;
+}
+
+/** 角への当たりの速さを数える（BUG-01）。そろったら armed */
+export function nextCornerCount(prev: { speed: number; count: number } | undefined, speed: number): { speed: number; count: number } {
+  if (prev && Math.abs(speed - prev.speed) <= prev.speed * BUG_TUNING.cornerSpeedRatio) return { speed: prev.speed, count: prev.count + 1 };
+  return { speed, count: 1 };
+}
+
+/** 2台の発射機が鏡に映したように置かれているか（BUG-23）。x か z の鏡、向きも鏡、設定も同じ */
+export function mirroredLaunchers(a: PlacedDevice, b: PlacedDevice): boolean {
+  const eq = (u: number, v: number) => Math.abs(u - v) < 1e-6;
+  const deg = (v: number) => ((Math.round(v) % 360) + 360) % 360;
+  const pa = JSON.stringify(a.params ?? {});
+  if (pa !== JSON.stringify(b.params ?? {}) || !eq(a.position[1], b.position[1])) return false;
+  const mirrorX = eq(a.position[2], b.position[2]) && !eq(a.position[0], b.position[0]) && deg(b.rotationYDeg) === deg(-a.rotationYDeg);
+  const mirrorZ = eq(a.position[0], b.position[0]) && !eq(a.position[2], b.position[2]) && deg(b.rotationYDeg) === deg(180 - a.rotationYDeg);
+  return mirrorX || mirrorZ;
+}
+
+/** カメラが最初の向きから大きく回っているか（BUG-27。方位角 rad） */
+export function cameraTurned(homeAzimuth: number, azimuth: number): boolean {
+  let d = Math.abs(azimuth - homeAzimuth) % (2 * Math.PI);
+  if (d > Math.PI) d = 2 * Math.PI - d;
+  return d >= (BUG_TUNING.flipDegrees * Math.PI) / 180;
+}
 
 /** 閉じたレール（球の通り道が輪になっている所）の見張り地点：輪の中で最初（配置順）の装置の出口 */
 export interface LoopCheckpoint {

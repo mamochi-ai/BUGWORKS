@@ -11,7 +11,7 @@ import { LOOP, loopFrame, loopRadius } from './loopGeometry';
 import { BRIDGE, approach, bridgeTargetAngle, inPaddleZone, solveDrive, type ShaftLink } from './drive';
 import { findConnections, footprint } from '../edit/placement';
 import { magnetAccel, magnetParams } from './magnet';
-import { BUG_TUNING, closedLoops, facingRepelPairs, loopKey, onFloor, seeded, slickDirection, wornFrictionFactor, type BugArm, type BugTrigger, type LoopCheckpoint, type MagnetPair } from './bugs';
+import { BUG_TUNING, boxCorners, mirroredLaunchers, nextCornerCount, touchingCorner, type Corner, closedLoops, facingRepelPairs, loopKey, onFloor, seeded, slickDirection, wornFrictionFactor, type BugArm, type BugTrigger, type LoopCheckpoint, type MagnetPair } from './bugs';
 import { inSwitchZone, signalSources } from './switch';
 import { ROTATOR, alignedWithEntry, atRotatorEntry, exitFor, rotatorParams, rotatorPowered, rotatorToLocal, rotatorToWorld, travelDir } from './rotator';
 import { SPRING_SHAPE, canCapture, compressionAt, planSpring, plateTop, toPlate, type SpringPlan } from './spring';
@@ -182,14 +182,20 @@ export class Simulation {
   readonly labBoxes: LabBox[];
   private world!: World;
   private balls: { id: number; body: RigidBody; prev: BallState }[] = [];
-  private launchers: (LauncherPlan & LauncherState & { fired: number })[] = [];
+  private launchers: (LauncherPlan & LauncherState & { fired: number; lastBallId: number | null })[] = [];
   private springs: (SpringPlan & SpringState & { plate: RigidBody })[] = [];
   private goals: (GoalState & { device: PlacedDevice })[] = [];
   private paddles: (PaddleState & { device: PlacedDevice; inside: Set<number> })[] = [];
   private bridges: (BridgeState & { device: PlacedDevice; deck: RigidBody; hinge: Vec3; deckCenter: Vec3; deckPitch: number; yaw: number })[] = [];
   private shaftLinks: ShaftLink[] = [];
   private magnets: PlacedDevice[] = [];
-  private rotators: (RotatorState & { device: PlacedDevice })[] = [];
+  private rotators: (RotatorState & { device: PlacedDevice; maze: { used: Set<string>; on: boolean; ignore: Map<number, number> } })[] = [];
+  // BUG-01：角と、球ごとの当たりの記録
+  private corners: Corner[] = [];
+  private cornerIn = new Set<string>();
+  private cornerHits = new Map<string, { speed: number; count: number }>();
+  // BUG-23：入れ替える予定（その tick に、2つの球）
+  private swaps: { at: number; a: number; b: number }[] = [];
   // ---- 隠しバグ（D-37）の状態。どれも再生ごと（リセットで初期化）
   private bugTriggers: BugTrigger[] = [];
   private stillTicks = new Map<number, number>();
@@ -301,6 +307,15 @@ export class Simulation {
       const more = l.params.shots === 0 || l.fired < l.params.shots;
       if (l.loadedBallId === null && reloadReady && more) this.load(l, l.hopperPoint);
     }
+    // BUG-23：鏡に映したように置いた2台が同時に撃ったら、少しあとで2つの球を入れ替える
+    const now = this.launchers.filter((l) => l.lastFireTick === this._tick && l.lastBallId !== null);
+    for (let i = 0; i < now.length; i++) {
+      for (let j = i + 1; j < now.length; j++) {
+        const da = this._layout.devices.find((d) => d.id === now[i].deviceId)!;
+        const db = this._layout.devices.find((d) => d.id === now[j].deviceId)!;
+        if (mirroredLaunchers(da, db)) this.swaps.push({ at: this._tick + Math.round(BUG_TUNING.swapDelaySeconds / PHYSICS_DT), a: now[i].lastBallId!, b: now[j].lastBallId! });
+      }
+    }
     for (const sp of this.springs) this.stepSpring(sp);
     this.stepDrive();
     this.stepMagnets();
@@ -361,7 +376,8 @@ export class Simulation {
     this.stillTicks.delete(b.id);
     this.slick.delete(b.id);
     for (const k of [...this.railAlong.keys()]) if (k.endsWith(`:${b.id}`)) this.railAlong.delete(k);
-    for (const m of [this.loopSide, this.loopLaps]) for (const k of [...m.keys()]) if (k.endsWith(`:${b.id}`)) m.delete(k);
+    for (const m of [this.loopSide, this.loopLaps, this.cornerHits]) for (const k of [...m.keys()]) if (k.endsWith(`:${b.id}`)) m.delete(k);
+    for (const k of [...this.cornerIn]) if (k.endsWith(`:${b.id}`)) this.cornerIn.delete(k);
     this.world.removeRigidBody(b.body);
     this.balls.splice(index, 1);
   }
@@ -559,7 +575,7 @@ export class Simulation {
   }
 
   /** 装填済みで溝の上に落ち着いている球を押し出す。無ければ理由を記録して見送る */
-  private fire(l: LauncherPlan & LauncherState & { fired: number }): void {
+  private fire(l: LauncherPlan & LauncherState & { fired: number; lastBallId: number | null }): void {
     const loaded = this.balls.find((b) => b.id === l.loadedBallId);
     const settled =
       loaded !== undefined &&
@@ -577,6 +593,7 @@ export class Simulation {
     loaded.body.setLinvel({ x: l.velocity[0] * k, y: l.velocity[1] * k, z: l.velocity[2] * k }, true);
     loaded.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     l.loadedBallId = null;
+    l.lastBallId = loaded.id;
     l.fired++;
     this.external.launcher++;
     l.lastFireTick = this._tick;
@@ -655,7 +672,11 @@ export class Simulation {
     this.railAlong = new Map();
     this.rotators = this._layout.devices
       .filter((d) => d.type === 'rotator')
-      .map((d) => ({ deviceId: d.id, device: d, angle: 0, queue: [], riding: null, releases: 0 }));
+      .map((d) => ({ deviceId: d.id, device: d, angle: 0, queue: [], riding: null, releases: 0, maze: { used: new Set<string>(), on: false, ignore: new Map<number, number>() } }));
+    this.corners = boxCorners(this._layout.devices.filter((d) => d.type === 'platform' || d.type === 'gearbox' || d.type === 'shaft' || d.type === 'magnet').map(footprint));
+    this.cornerIn = new Set();
+    this.cornerHits = new Map();
+    this.swaps = [];
     this.bridges = [];
     this.shaftLinks = findConnections(this._layout.devices)
       .filter((c) => c.type === 'shaft')
@@ -751,6 +772,7 @@ export class Simulation {
       const runtime = {
         ...plan,
         fired: 0,
+        lastBallId: null,
         nextFireTick: 0,
         lastFireTick: null,
         loadedBallId: null,
@@ -861,7 +883,14 @@ export class Simulation {
       for (const b of this.balls) {
         if (busy.has(b.id)) continue;
         const t = b.body.translation();
+        const until = r.maze.ignore.get(b.id);
+        if (until !== undefined && this._tick < until) continue;
         if (atRotatorEntry(rotatorToLocal(r.device, [t.x, t.y, t.z]))) {
+          // BUG-20：入口に球が戻ってきた
+          if (r.maze.used.size === 3 && !r.maze.on) {
+            r.maze.on = true;
+            this.bugTriggers.push({ id: 'BUG-20', tick: this._tick, at: [...r.device.position] });
+          }
           r.queue.push(b.id);
           busy.add(b.id);
         }
@@ -895,7 +924,11 @@ export class Simulation {
             e = others[Math.floor(seeded(this.arm.branchSeed) * others.length)];
             this.bugTriggers.push({ id: 'BUG-15', tick: this._tick, at: [...r.device.position] });
           }
-          const exact: Vec3 = e === 'front' ? [0, 0, 1] : e === 'left' ? [1, 0, 0] : [-1, 0, 0];
+          r.maze.used.add(e);
+          // BUG-20：効いている間は、前の出口と入口のつながりが入れ替わる（前へ出る球は入口から出る）
+          const back = r.maze.on && e === 'front';
+          if (back) r.maze.ignore.set(ride.ballId, this._tick + Math.round(BUG_TUNING.mazeIgnoreSeconds / PHYSICS_DT));
+          const exact: Vec3 = back ? [0, 0, -1] : e === 'front' ? [0, 0, 1] : e === 'left' ? [1, 0, 0] : [-1, 0, 0];
           const yaw = (r.device.rotationYDeg * Math.PI) / 180;
           const speed = ROTATOR.releaseSpeed * (this.watchHit(r.deviceId) ? BUG_TUNING.watchReleaseFactor : 1);
           const wv = rotateY(exact, yaw).map((x) => x * speed) as Vec3;
@@ -1000,7 +1033,63 @@ export class Simulation {
         if (f < 1) for (const c of this.railColliders.get(track.deviceId) ?? []) c.setFriction(MATERIAL.railFriction * f);
       }
     }
+    this.detectCorners();
+    this.doSwaps();
     this.detectLoops();
+  }
+
+  /** BUG-01 の判定と効果（条件は開発用資料）。効果：その1回だけ、はね返る向きを水平に90度回す */
+  private detectCorners(): void {
+    if (this.corners.length === 0) return;
+    const T = BUG_TUNING;
+    for (const b of this.balls) {
+      const t = b.body.translation();
+      const p: Vec3 = [t.x, t.y, t.z];
+      this.corners.forEach((c, ci) => {
+        const key = `${ci}:${b.id}`;
+        const touching = touchingCorner(c, p, BALL_RADIUS);
+        const was = this.cornerIn.has(key);
+        if (!touching) {
+          this.cornerIn.delete(key);
+          return;
+        }
+        if (was) return;
+        this.cornerIn.add(key);
+        const speed = Math.hypot(b.prev.linvel[0], b.prev.linvel[2]);
+        if (speed < T.cornerMinSpeed) return;
+        const prev = this.cornerHits.get(key);
+        if (prev && prev.count >= T.cornerHits) {
+          // 4回目：はね返った向きを90度回す（速さはそのまま）
+          const v = b.body.linvel();
+          b.body.setLinvel({ x: -v.z, y: v.y, z: v.x }, true);
+          this.cornerHits.delete(key);
+          this.bugTriggers.push({ id: 'BUG-01', tick: this._tick, at: [c.x, p[1], c.z] });
+          return;
+        }
+        this.cornerHits.set(key, nextCornerCount(prev, speed));
+      });
+    }
+  }
+
+  /** BUG-23 の効果：2つの球の位置を入れ替える（入れ替え先にほかの球が重なるなら入れ替えない） */
+  private doSwaps(): void {
+    if (this.swaps.length === 0) return;
+    const due = this.swaps.filter((x) => x.at === this._tick);
+    this.swaps = this.swaps.filter((x) => x.at > this._tick);
+    for (const s of due) {
+      const a = this.balls.find((x) => x.id === s.a);
+      const b = this.balls.find((x) => x.id === s.b);
+      if (!a || !b) continue;
+      const pa = a.body.translation();
+      const pb = b.body.translation();
+      const crowded = this.balls.some(
+        (o) => o !== a && o !== b && [pa, pb].some((q) => { const t = o.body.translation(); return Math.hypot(t.x - q.x, t.y - q.y, t.z - q.z) < BALL_RADIUS * 2.05; }),
+      );
+      if (crowded) continue;
+      a.body.setTranslation({ x: pb.x, y: pb.y, z: pb.z }, true);
+      b.body.setTranslation({ x: pa.x, y: pa.y, z: pa.z }, true);
+      this.bugTriggers.push({ id: 'BUG-23', tick: this._tick, at: [(pa.x + pb.x) / 2, (pa.y + pb.y) / 2, (pa.z + pb.z) / 2] });
+    }
   }
 
   /**
@@ -1141,6 +1230,9 @@ export class Simulation {
     for (const q of this.magnetPairs) exact.push(q.flipped ? 1 : 0, q.centerTicks);
     for (const track of this.tracks) exact.push(wornFrictionFactor(this.railPasses.get(track.deviceId) ?? 0));
     exact.push(this.watchMagnetLeft);
+    for (const r of this.rotators) exact.push(r.maze.used.size, r.maze.on ? 1 : 0, [...r.maze.ignore.values()].filter((u) => u > this._tick).length);
+    exact.push(this.swaps.length, ...this.swaps.map((x) => x.at - this._tick));
+    exact.push([...this.cornerHits.values()].filter((h) => h.count >= BUG_TUNING.cornerHits).length);
     const approx: number[] = [];
     const mod = (a: number, m: number) => ((a % m) + m) % m;
     for (const p of this.paddles) approx.push(mod(p.angle, PADDLE.stepRad), p.target - p.angle);
