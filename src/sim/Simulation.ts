@@ -872,6 +872,16 @@ export class Simulation {
       // 送り出すときは、すべらずに転がる回り方にする（ω = 上向き × v / 半径。D-45）
       b.body.setAngvel({ x: v[2] / BALL_RADIUS, y: 0, z: -v[0] / BALL_RADIUS }, true);
     };
+    const hold = (r: (typeof this.rotators)[number], ballId: number, z: number) => {
+      const b = this.balls.find((x) => x.id === ballId);
+      if (!b) return;
+      const t = b.body.translation();
+      const w = rotatorToWorld(r.device, [0, 0, z]);
+      const v = b.body.linvel();
+      b.body.setTranslation({ x: w[0], y: t.y, z: w[2] }, true);
+      b.body.setLinvel({ x: 0, y: Math.min(0, v.y), z: 0 }, true);
+      b.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    };
     for (const r of this.rotators) {
       const { degreesPerSecond, direction } = rotatorParams(r.device);
       // 信号が ON（配線なしなら常に）の間は回る。OFF になったら、まっすぐの向き（180°ごと）まで回ってから止まる
@@ -899,7 +909,8 @@ export class Simulation {
       if (!r.riding && r.queue.length > 0 && alignedWithEntry(r.angle)) {
         r.riding = { ballId: r.queue.shift()!, phase: 'slide', t: 0, turned: 0 };
       }
-      r.queue.forEach((id, i) => place(r, id, [0, lift, -ROTATOR.gateD - i * ROTATOR.queueGap]));
+      // 待っている球は台の手前のレールの上に止める（高さはレールに任せ、前後左右だけ決める）
+      r.queue.forEach((id, i) => hold(r, id, -ROTATOR.gateD - i * ROTATOR.queueGap));
       if (r.riding) {
         const ride = r.riding;
         ride.turned += dA;
