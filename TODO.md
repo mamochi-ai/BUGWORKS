@@ -42,7 +42,8 @@
 - [x] 発見→演出→図鑑（未発見条件を UI・保存に出さない）
 - [ ] `triggerDetector` / `effectController` / `visualEffectId` / `safetyBudget` を装置ごとの部品に分ける（今は bugs.ts と Simulation に直接）
 - [x] BUG-03・BUG-15・BUG-30 を追加（D-42）
-- [ ] 残りの34種
+- [x] BUG-01・BUG-20・BUG-23・BUG-27 を追加（D-46）
+- [ ] 残りの30種
 - [ ] 60Hz 前提の tick 表記の扱いを決める（SPEC_GAPS G-02）
 
 ## 3. 手順4：永久機関検証

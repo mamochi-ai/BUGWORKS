@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { BUG_TUNING, IMPLEMENTED_BUGS, closedLoops, facingRepelPairs, wornFrictionFactor } from '../src/sim/bugs';
+import { BUG_TUNING, IMPLEMENTED_BUGS, boxCorners, cameraTurned, closedLoops, facingRepelPairs, mirroredLaunchers, nextCornerCount, seeded, touchingCorner, wornFrictionFactor } from '../src/sim/bugs';
+import { ROTATOR_SAMPLE_LAYOUT } from '../src/sim/layout';
 import { RepeatTracker, WatchTracker } from '../src/bugs/trackers';
 import { rotatorRing } from './loops';
 import { PHYSICS_HZ } from '../src/sim/constants';
@@ -24,8 +25,8 @@ const magnetsAt = (z: number, mode = -1): PlacedDevice[] => [
 ];
 
 describe('隠しバグ（定義）', () => {
-  it('まず3種（マスター仕様 §10 手順3）に、BUG-03・15・30 を足した6種（D-42）', () => {
-    expect(IMPLEMENTED_BUGS).toEqual(['BUG-03', 'BUG-12', 'BUG-15', 'BUG-16', 'BUG-18', 'BUG-30']);
+  it('まず3種（マスター仕様 §10 手順3）に、BUG-03・15・30（D-42）、BUG-01・20・23・27（D-46）を足した10種', () => {
+    expect(IMPLEMENTED_BUGS).toEqual(['BUG-01', 'BUG-03', 'BUG-12', 'BUG-15', 'BUG-16', 'BUG-18', 'BUG-20', 'BUG-23', 'BUG-27', 'BUG-30']);
   });
 
   it('向かい合う磁石の組は「しりぞける」同士で、向きが合うときだけ', () => {
@@ -209,8 +210,95 @@ describe('隠しバグ（BUG-03・15・30, D-42）', () => {
   });
 });
 
+describe('隠しバグ（BUG-01・20・23・27, D-46）', () => {
+  let R3: Rapier;
+  beforeAll(async () => {
+    R3 = await loadRapier();
+  });
+  const ids = (s: Simulation) => s.bugEvents().map((b) => b.id);
+  const go = (s: Simulation, sec: number) => {
+    for (let i = 0; i < PHYSICS_HZ * sec; i++) s.step();
+    return s;
+  };
+
+  it('判定の部品：角・速さのそろい方・鏡に映した発射機・カメラの向き', () => {
+    const c = boxCorners([{ minX: 0, maxX: 1, minZ: 0, maxZ: 1, minY: 0, maxY: 0.4 }]);
+    expect(c).toHaveLength(4);
+    expect(touchingCorner(c[0], [-0.05, 0.1, -0.05], 0.06)).toBe(true);
+    expect(touchingCorner(c[0], [-0.5, 0.1, -0.5], 0.06)).toBe(false);
+    let h = nextCornerCount(undefined, 2);
+    h = nextCornerCount(h, 2.05);
+    expect(h.count).toBe(2);
+    expect(nextCornerCount(h, 2.5).count).toBe(1);
+    const L = (x: number, rot: number, params?: Record<string, number>): PlacedDevice => ({ id: `l${x}`, type: 'launcher', position: [x, 0, -3], rotationYDeg: rot, params });
+    expect(mirroredLaunchers(L(-1, 0), L(1, 0))).toBe(true);
+    expect(mirroredLaunchers(L(-1, 90), L(1, 270))).toBe(true);
+    expect(mirroredLaunchers(L(-1, 90), L(1, 90))).toBe(false);
+    expect(mirroredLaunchers(L(-1, 0), L(1, 0, { launchSpeed: 6 }))).toBe(false);
+    expect(cameraTurned(0, Math.PI)).toBe(true);
+    expect(cameraTurned(0.5, 0.5 - Math.PI * 0.9)).toBe(true);
+    expect(cameraTurned(0, Math.PI / 2)).toBe(false);
+  });
+
+  it('BUG-23：起きる配置では2つの球の位置が入れ替わる。設定がちがえば起きない', () => {
+    const pair = (p2?: Record<string, number>): PlacedDevice[] => [
+      { id: 'launcher_1', type: 'launcher', position: [-1, 0, -3], rotationYDeg: 0, params: { angleDegrees: 0, shots: 1 } },
+      { id: 'launcher_2', type: 'launcher', position: [1, 0, -3], rotationYDeg: 0, params: { angleDegrees: 0, shots: 1, ...p2 } },
+    ];
+    const s = go(new Simulation(R3, { seed: 404, devices: pair() }), 1);
+    expect(ids(s)).toEqual(['BUG-23']);
+    const b0 = s.readBalls().find((b) => b.id === 0)!;
+    expect(b0.position[0]).toBeGreaterThan(0); // 左の発射機の球が右へ
+    expect(ids(go(new Simulation(R3, { seed: 404, devices: pair({ launchSpeed: 6 }) }), 1))).toEqual([]);
+  });
+
+  it('BUG-20：起きると、前の出口へ出る球が入口から戻っていく', () => {
+    // 3つ目の出口は BUG-15 で作る（最初の分岐が右になる種を探す）
+    let seed = 0;
+    while (Math.floor(seeded(seed) * 2) !== 1) seed++;
+    const s = new Simulation(R3, { seed: 404, devices: [...ROTATOR_SAMPLE_LAYOUT.devices] });
+    s.armBugs({ branchSeed: seed });
+    go(s, 14);
+    expect(ids(s)).toEqual(['BUG-15', 'BUG-20']);
+    // 入口から戻る球がある（回転台より手前を、入口の向きへ動く）。起きていない再生では、そうならない
+    const goesBack = (sim: Simulation, sec: number) => {
+      let seen = false;
+      for (let i = 0; i < PHYSICS_HZ * sec; i++) {
+        sim.step();
+        seen ||= sim.readBalls().some((b) => b.position[2] < -0.9 && b.position[2] > -2.2 && b.linvel[2] < -0.3);
+      }
+      return seen;
+    };
+    expect(goesBack(s, 4)).toBe(true);
+    const normal = new Simulation(R3, { seed: 404, devices: [...ROTATOR_SAMPLE_LAYOUT.devices] });
+    expect(goesBack(normal, 18)).toBe(false);
+    expect(ids(normal)).toEqual([]);
+  });
+
+  it('BUG-01：起きると、その1回だけはね返る向きが90度回る', () => {
+    const devices: PlacedDevice[] = [
+      { id: 'launcher_1', type: 'launcher', position: [-4, 0, -4], rotationYDeg: 0, params: { shots: 1, angleDegrees: 0 } },
+      { id: 'platform_1', type: 'platform', position: [0, 0, 0], rotationYDeg: 0, params: { heightMeters: 0.4 } },
+    ];
+    const s = new Simulation(R3, { seed: 404, devices });
+    go(s, 1.5); // 球が床に落ちて転がっている
+    // 試験のために、同じ球を同じ所から同じ速さで角（-0.8, -0.8）へ何度も向かわせる
+    const ball = (s as unknown as { balls: { id: number; body: { setTranslation(v: object, w: boolean): void; setLinvel(v: object, w: boolean): void; setAngvel(v: object, w: boolean): void; linvel(): { x: number; y: number; z: number } } }[] }).balls[0];
+    const throwAt = () => {
+      ball.body.setTranslation({ x: -1.5, y: 0.06, z: -1.5 }, true);
+      ball.body.setLinvel({ x: 2, y: 0, z: 2 }, true);
+      ball.body.setAngvel({ x: 2 / 0.06, y: 0, z: -2 / 0.06 }, true);
+      for (let i = 0; i < 60; i++) s.step();
+    };
+    for (let k = 0; k < 3; k++) throwAt();
+    expect(ids(s)).not.toContain('BUG-01');
+    throwAt();
+    expect(ids(s)).toContain('BUG-01');
+  });
+});
+
 describe('バグ図鑑（記録と一覧）', () => {
-  it('40種の一覧。名前と説明を持つのは実装した6種だけ（未実装の内容は配信物に入れない）', async () => {
+  it('40種の一覧。名前と説明を持つのは実装した10種だけ（未実装の内容は配信物に入れない）', async () => {
     const { CODEX } = await import('../src/bugs/codexData');
     expect(CODEX).toHaveLength(40);
     expect(CODEX.filter((c) => c.name).map((c) => c.id)).toEqual([...IMPLEMENTED_BUGS]);

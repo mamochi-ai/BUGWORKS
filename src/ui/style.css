@@ -323,3 +323,12 @@ html, body {
 @media (max-width: 900px) {
   .hud-top .brand { display: none; }
 }
+
+/* BUG-27（D-46）：HUD の左右反転と隠し座標。パネルの位置だけ入れ替え、文字は読めるように戻す */
+#hud.hud-mirror { transform: scaleX(-1); }
+#hud.hud-mirror > * { transform: scaleX(-1); }
+.hidden-coords {
+  position: absolute; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 64px); translate: -50% 0;
+  font-family: ui-monospace, monospace; font-size: 13px; color: #7dff9a; background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #2c6b3a; border-radius: 6px; padding: 4px 10px; pointer-events: none; letter-spacing: 0.04em;
+}

@@ -11,7 +11,7 @@ export interface CodexEntry {
 }
 
 export const CODEX: readonly CodexEntry[] = [
-  { id: 'BUG-01', category: '接触' },
+  { id: 'BUG-01', category: '接触', name: 'グリッチキューブ', description: '4回目の衝突だけ反発方向を90度回す' },
   { id: 'BUG-02', category: '運動' },
   { id: 'BUG-03', category: '循環', name: '無限ループ君', description: '4周目から周回損失を相殺する' },
   { id: 'BUG-04', category: '複製' },
@@ -30,14 +30,14 @@ export const CODEX: readonly CodexEntry[] = [
   { id: 'BUG-17', category: '複製' },
   { id: 'BUG-18', category: '材質', name: '劣化君', description: '摩擦が段階的に下がる' },
   { id: 'BUG-19', category: '重力' },
-  { id: 'BUG-20', category: '空間' },
+  { id: 'BUG-20', category: '空間', name: '迷路君', description: '出口と入口の接続を入れ替える' },
   { id: 'BUG-21', category: '時間' },
   { id: 'BUG-22', category: '空間' },
-  { id: 'BUG-23', category: '位置' },
+  { id: 'BUG-23', category: '位置', name: 'すり替え君', description: '2球の位置を交換' },
   { id: 'BUG-24', category: '表示' },
   { id: 'BUG-25', category: '接触' },
   { id: 'BUG-26', category: '材質' },
-  { id: 'BUG-27', category: '表示' },
+  { id: 'BUG-27', category: '表示', name: '画面バグ君', description: 'HUDが左右反転し隠し座標を表示' },
   { id: 'BUG-28', category: '信号' },
   { id: 'BUG-29', category: '信号' },
   { id: 'BUG-30', category: '観測', name: '監視君', description: '観測対象の次の挙動を1回変更' },

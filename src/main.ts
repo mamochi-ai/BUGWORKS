@@ -16,6 +16,8 @@ import { BugUi } from './ui/BugUi';
 import { Sound, SoundWatcher } from './ui/Sound';
 import { PerpetualUi } from './ui/PerpetualUi';
 import { RepeatTracker, WatchTracker } from './bugs/trackers';
+import { ScreenBug } from './ui/ScreenBug';
+import { cameraTurned } from './sim/bugs';
 
 async function boot(): Promise<void> {
   const viewport = document.getElementById('viewport')!;
@@ -77,12 +79,19 @@ async function boot(): Promise<void> {
   const watch = new WatchTracker();
   let printed = false;
   let wasReady = true;
+  const screenBug = new ScreenBug(hudRoot);
   ctl.onChange(() => {
     // 初期状態から動き出したとき（再生・1ステップ）に、準備したバグを渡す
     if (wasReady && ctl.state !== 'ready') {
       sim.armBugs({ branchSeed: repeat.armed ? editor.layout.seed : undefined, watchedId: watch.armed ?? undefined });
       printed = false;
+      // BUG-27（画面の出来事。条件は開発用資料）
+      if (cameraTurned(CameraRig.HOME_AZIMUTH, rig.azimuth())) {
+        screenBug.set(true);
+        bugUi.handle({ id: 'BUG-27', tick: 0, at: [0, 0, 0] });
+      }
     }
+    if (ctl.state === 'ready') screenBug.set(false);
     wasReady = ctl.state === 'ready';
   });
   // この再生で発動したバグのうち、まだ画面に出していないもの（同じバグは1回の再生で1回だけ知らせる）
@@ -184,6 +193,7 @@ async function boot(): Promise<void> {
       bugShown.add(bugs[bugSeen].id);
       bugUi.handle(bugs[bugSeen]);
     }
+    if (screenBug.on) screenBug.update(sim.readBalls()[0]?.position ?? null, sim.tick);
     rig.update(Math.min(realDt, 0.1));
     view.render(rig.camera, alpha);
 
