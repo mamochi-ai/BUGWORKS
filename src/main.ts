@@ -17,6 +17,7 @@ import { Sound, SoundWatcher } from './ui/Sound';
 import { PerpetualUi } from './ui/PerpetualUi';
 import { RepeatTracker, WatchTracker } from './bugs/trackers';
 import { ScreenBug } from './ui/ScreenBug';
+import { TitleUi } from './ui/TitleUi';
 import { cameraTurned } from './sim/bugs';
 
 async function boot(): Promise<void> {
@@ -33,8 +34,8 @@ async function boot(): Promise<void> {
   const hud = new Hud(hudRoot, ctl, () => rig.home());
   new EditPanel(hudRoot, { editor, ctl, addPosition: () => ({ x: rig.controls.target.x, z: rig.controls.target.z }) });
   const stage = new StageController(editor, ctl, sim, VERTICAL_SLICE_LAYOUT);
-  new StageUi(hudRoot, stage, ctl);
-  new BlueprintUi(hudRoot, editor, ctl, stage);
+  const stageUi = new StageUi(hudRoot, stage, ctl);
+  const blueprintUi = new BlueprintUi(hudRoot, editor, ctl, stage);
   const bugUi = new BugUi(hudRoot);
   // 効果音（D-40）：上のバーに ON/OFF。クリア・発見でも鳴らす
   const sound = new Sound();
@@ -69,6 +70,30 @@ async function boot(): Promise<void> {
   });
   syncBgm();
   hudRoot.querySelector('.hud-top')?.appendChild(bgmBtn);
+  // タイトル画面（D-47）：起動すると最初に出す。上のバーの「タイトル」で戻れる
+  const title = new TitleUi(hudRoot, {
+    start: () => stageUi.showSelect(true),
+    loadBlueprint: () => {
+      stage.free();
+      blueprintUi.show();
+    },
+    sound,
+    onSettings: () => {
+      syncSound();
+      syncBgm();
+    },
+  });
+  const titleBtn = document.createElement('button');
+  titleBtn.type = 'button';
+  titleBtn.className = 'bp-open compact';
+  titleBtn.innerHTML = '<i aria-hidden="true">☰</i><span>タイトル</span>';
+  titleBtn.setAttribute('aria-label', 'タイトル画面へ');
+  titleBtn.addEventListener('click', () => {
+    ctl.pause();
+    title.show();
+  });
+  hudRoot.querySelector('.hud-top')?.appendChild(titleBtn);
+  title.show();
   ctl.onChange(() => sound.setBusy(ctl.state === 'running'));
   bugUi.setOnDiscover(() => sound.play('bug'));
   stage.onChange((c) => c === 'clear' && sound.play('clear'));

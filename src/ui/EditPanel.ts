@@ -48,8 +48,8 @@ export class EditPanel {
     panel.className = 'edit';
     panel.setAttribute('aria-label', '装置の配置');
     panel.innerHTML = `
-      <h2>装置</h2>
-      <div class="palette">
+      <h2><button type="button" class="fold" data-k="fold" aria-expanded="true" aria-controls="palette-list"><span>装置</span><i aria-hidden="true">▾</i></button></h2>
+      <div class="palette" id="palette-list">
         ${PALETTE_TYPES.map((t) => `<button type="button" data-e="add-${t}" class="add" title="${getDeviceDef(t).name}を追加"><i>＋</i><span>${PALETTE_LABELS[t]}</span><small data-k="left-${t}"></small></button>`).join('')}
       </div>
       <div class="sel" data-k="sel"></div>
@@ -86,6 +86,24 @@ export class EditPanel {
       </div>
     `;
     root.appendChild(panel);
+    // 「装置」を押すと、装置のボタンをたたむ／ひらく（この端末に覚える）
+    const fold = panel.querySelector<HTMLButtonElement>('[data-k="fold"]')!;
+    const setFold = (open: boolean) => {
+      fold.setAttribute('aria-expanded', String(open));
+      panel.classList.toggle('folded', !open);
+      try {
+        localStorage.setItem('bugworks.palette.v1', open ? 'open' : 'closed');
+      } catch {
+        /* 覚えられなくても続ける */
+      }
+    };
+    fold.addEventListener('click', () => setFold(fold.getAttribute('aria-expanded') !== 'true'));
+    try {
+      if (localStorage.getItem('bugworks.palette.v1') === 'closed') setFold(false);
+    } catch {
+      /* 読めなければ開いたまま */
+    }
+
     panel.querySelectorAll<HTMLElement>('[data-k]').forEach((n) => (this.el[n.dataset.k!] = n));
     panel.querySelectorAll<HTMLButtonElement>('[data-e]').forEach((b) => {
       this.el[b.dataset.e!] = b;

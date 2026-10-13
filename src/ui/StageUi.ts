@@ -1,5 +1,5 @@
 import type { StageController } from '../stage/StageController';
-import { EVENT_TEXT, STAGES } from '../stage/stages';
+import { CHAPTER_TITLES, EVENT_TEXT, STAGES, chapterOf, chapters } from '../stage/stages';
 import { S404_SVG, celebrate } from './effects';
 import type { SimulationController } from '../sim/SimulationController';
 
@@ -9,6 +9,8 @@ import type { SimulationController } from '../sim/SimulationController';
  */
 export class StageUi {
   private el: Record<string, HTMLElement> = {};
+  /** 表示している章（null なら開いたときに決める） */
+  private tab: number | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -32,10 +34,13 @@ export class StageUi {
     const select = document.createElement('div');
     select.className = 'stage-modal';
     select.dataset.k = 'select';
+    select.hidden = true;
     select.innerHTML = `
       <div class="stage-dialog" role="dialog" aria-modal="true" aria-labelledby="stage-select-title">
         <h2 id="stage-select-title">ステージ選択</h2>
-        <ul class="stage-list" data-k="list"></ul>
+        <div class="stage-tabs" role="tablist" aria-label="章" data-k="tabs"></div>
+        <ul class="stage-list" role="tabpanel" data-k="list"></ul>
+        <p class="stage-next" data-k="nextChapter"></p>
         <div class="stage-actions">
           <button type="button" data-s="free"><i>✎</i><span>自由研究</span></button>
           <button type="button" data-s="close-select" data-k="closeSelect"><i>✕</i><span>閉じる</span></button>
@@ -84,8 +89,15 @@ export class StageUi {
     });
     this.renderList();
     this.sync();
-    // 起動直後はステージ選択から始める（閉じるボタンはまだ出さない）
-    this.el.closeSelect.hidden = true;
+  }
+
+  /** ステージ選択を開く（タイトル画面の「ゲーム開始」から。閉じずに選ぶ／自由研究を押す） */
+  showSelect(fromTitle = false): void {
+    this.el.clear.hidden = true;
+    this.tab = null;
+    this.renderList();
+    this.el.closeSelect.hidden = fromTitle;
+    this.el.select.hidden = false;
   }
 
   private run(action: string, id?: string): void {
@@ -93,6 +105,12 @@ export class StageUi {
       case 'open':
         this.el.clear.hidden = true;
         this.openSelect();
+        break;
+      case 'tab':
+        if (id) {
+          this.tab = Number(id);
+          this.renderList();
+        }
         break;
       case 'close-select':
         this.el.select.hidden = true;
@@ -120,6 +138,7 @@ export class StageUi {
   }
 
   private openSelect(): void {
+    this.tab = null;
     this.renderList();
     this.el.closeSelect.hidden = false;
     this.el.select.hidden = false;
@@ -130,8 +149,35 @@ export class StageUi {
     this.el.clear.hidden = true;
   }
 
+  /** 遊べる章：その章の最初のステージが開いている章（前の章をすべてクリアすると出てくる） */
+  private openChapters(): number[] {
+    return chapters().filter((c) => {
+      const first = STAGES.find((s) => chapterOf(s.id) === c);
+      return !!first && this.stage.unlock(first.id).unlocked;
+    });
+  }
+
+  /** 開いたときの章：遊んでいるステージの章 → まだクリアしていないステージがある最初の章 → 最後の章 */
+  private defaultTab(open: number[]): number {
+    const cur = this.stage.current;
+    if (cur && open.includes(chapterOf(cur.id))) return chapterOf(cur.id);
+    const todo = open.find((c) => STAGES.some((s) => chapterOf(s.id) === c && !this.stage.isCleared(s.id)));
+    return todo ?? open[open.length - 1] ?? 1;
+  }
+
   private renderList(): void {
-    this.el.list.innerHTML = STAGES.map((s) => {
+    const open = this.openChapters();
+    if (this.tab === null || !open.includes(this.tab)) this.tab = this.defaultTab(open);
+    const tab = this.tab;
+    this.el.tabs.innerHTML = open
+      .map((c) => {
+        const done = STAGES.filter((s) => chapterOf(s.id) === c).every((s) => this.stage.isCleared(s.id));
+        return `<button type="button" role="tab" data-s="tab" data-id="${c}" aria-selected="${c === tab}" data-done="${done}" aria-label="ステージ${c}「${CHAPTER_TITLES[c] ?? ''}」${done ? '（すべてクリア）' : ''}">ステージ${c}<small>${CHAPTER_TITLES[c] ?? ''}</small></button>`;
+      })
+      .join('');
+    const next = chapters().find((c) => !open.includes(c));
+    this.el.nextChapter.textContent = next ? `ステージ${next}「${CHAPTER_TITLES[next] ?? ''}」は、ステージ${next - 1} をすべてクリアすると出てきます。` : '';
+    this.el.list.innerHTML = STAGES.filter((s) => chapterOf(s.id) === tab).map((s) => {
       const cleared = this.stage.isCleared(s.id);
       const lock = this.stage.unlock(s.id);
       // 準備中を先に判定（機能が無いので、前をクリアしても遊べない）
