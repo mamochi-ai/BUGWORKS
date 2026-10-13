@@ -83,7 +83,7 @@ export class EditPanel {
           <button type="button" data-e="sample-rails">いろいろなレール</button>
           <button type="button" data-e="sample-rotator">回転台で分ける</button>
           <button type="button" data-e="sample-loop">ループと上り坂</button>
-          <button type="button" data-e="sample-full">全部のせ（99個）</button>
+          <button type="button" data-e="sample-full">全部のせ</button>
         </div>
       </div>
     `;
@@ -203,7 +203,7 @@ export class EditPanel {
         editor.loadLayout(ROTATOR_SAMPLE_LAYOUT.devices, 'サンプル「回転台で分ける」を読み込みました。スイッチが ON の間は左へ、OFF の間はまっすぐ出します');
         break;
       case 'sample-full':
-        editor.loadLayout(FULL_SAMPLE_LAYOUT.devices, 'サンプル「全部のせ」を読み込みました。7本のレーンに装置を99個並べています（重さの確認にも）');
+        editor.loadLayout(FULL_SAMPLE_LAYOUT.devices, `サンプル「全部のせ」を読み込みました。発射機1台からゴールまで、全種類の装置を${FULL_SAMPLE_LAYOUT.devices.length}個使った一本道です（最初の球がゴールするまで約80秒）`);
         break;
       case 'sample-loop':
         editor.loadLayout(LOOP_SAMPLE_LAYOUT.devices, 'サンプル「ループと上り坂」を読み込みました。坂で勢いをつけてループを1周し、上り坂と斜めのレールを通ります');
