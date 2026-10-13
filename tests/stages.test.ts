@@ -4,7 +4,7 @@ import { PHYSICS_HZ } from '../src/sim/constants';
 import type { PlacedDevice } from '../src/sim/layout';
 import { loadRapier, type Rapier } from '../src/sim/rapier';
 import { Simulation } from '../src/sim/Simulation';
-import { STAGES, STICKY_EVENTS, unlockState, type StageDef } from '../src/stage/stages';
+import { CHAPTER_TITLES, STAGES, STICKY_EVENTS, chapterOf, chapters, unlockState, type StageDef } from '../src/stage/stages';
 
 const playable = STAGES.filter((s) => !s.comingSoon);
 
@@ -220,5 +220,19 @@ describe('ステージ4：ひと工夫しないと解けない', () => {
     const r = play(R, withSolution('4-5', (d) => ({ ...d, signalTargets: [] })), st('4-5'), 12);
     expect(r.events.ball_enter_goal).toBe(true);
     expect(r.events.all_goals).toBe(false);
+  });
+});
+
+describe('章（ステージ選択のタブ）', () => {
+  it('ステージ ID の前の数字が章。作ってある章は 1〜4 で、題はステージ資料どおり', () => {
+    expect(chapterOf('2-3')).toBe(2);
+    expect(chapters()).toEqual([1, 2, 3, 4]);
+    expect(chapters().map((c) => CHAPTER_TITLES[c])).toEqual(['ころがる', 'はねる', 'まわる', 'ひきあう']);
+  });
+
+  it('次の章は、前の章をすべてクリアすると開く（1-5 まで → 2-1）', () => {
+    const ch1 = STAGES.filter((s) => chapterOf(s.id) === 1).map((s) => s.id);
+    expect(unlockState('2-1', ch1.slice(0, -1)).unlocked).toBe(false);
+    expect(unlockState('2-1', ch1).unlocked).toBe(true);
   });
 });

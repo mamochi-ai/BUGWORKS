@@ -337,6 +337,18 @@ export function unlockState(id: string, cleared: readonly string[]): { unlocked:
   return missing ? { unlocked: false, reason: `${missing.id}「${missing.name}」をクリアすると遊べます` } : { unlocked: true };
 }
 
+/** 章（ステージ資料 v1.0 の chapter_title）。ステージ ID の「-」の前が章の番号 */
+export const CHAPTER_TITLES: Record<number, string> = { 1: 'ころがる', 2: 'はねる', 3: 'まわる', 4: 'ひきあう', 5: 'つなぐ', 6: 'こわれる？', 7: 'とまらない', 8: 'BUGWORKS' };
+
+export function chapterOf(id: string): number {
+  return Number(id.split('-')[0]);
+}
+
+/** 作ってある章（番号順） */
+export function chapters(): number[] {
+  return [...new Set(STAGES.map((s) => chapterOf(s.id)))].sort((a, b) => a - b);
+}
+
 export function findStage(id: string): StageDef | undefined {
   return STAGES.find((s) => s.id === id);
 }
