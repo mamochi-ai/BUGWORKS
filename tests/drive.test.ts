@@ -128,7 +128,8 @@ describe('回転を伝える装置（物理あり）', () => {
   });
 
   it('可動橋が上がったままなら（軸を外すと）球は渡れない', () => {
-    const s = make(L.filter((d) => d.id !== 'shaft_1'));
+    // 床に落ちた球が足場になって、あとの球が台へはね上がらないよう、撃つのは2個まで
+    const s = make(L.filter((d) => d.id !== 'shaft_1').map((d) => (d.type === 'launcher' ? { ...d, params: { shots: 2 } } : d)));
     for (let i = 0; i < PHYSICS_HZ * 8; i++) s.step();
     expect(s.snapshot().bridges[0].angle).toBeCloseTo(BRIDGE.openRad, 9);
     expect(s.goalHits).toBe(0);

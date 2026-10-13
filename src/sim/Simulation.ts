@@ -149,7 +149,7 @@ const MATERIAL = {
   ballFriction: 0.6,
   ballRestitution: 0.2,
   ballDensity: 7.8, // 鉄 ≒ 7800kg/m³ だが Rapier の質量単位は任意。相対値として使用
-  ballAngularDamping: 0.3,
+  ballAngularDamping: 0.05, // 転がりの抵抗。0.3 だと坂で加速しにくかった（D-51）
   railFriction: 0.6,
   floorFriction: 0.8,
 };

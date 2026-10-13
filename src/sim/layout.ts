@@ -151,12 +151,12 @@ export const ROTATOR_SAMPLE_LAYOUT: SliceLayout = {
 /**
  * 見本「ループと上り坂」（DECISIONS.md D-33）：高い発射機から 0.6m ずつ下る坂で勢いをつけ、ループで宙返り →
  * 0.1m の上り坂 → 45°の曲がり始め → 斜めの直線 → 45°の曲がり終わり → ゴール。
- * 上り坂を 0.2m にすると上りきれずに戻る（勢いが足りない）。
+ * 上り坂を 0.4m にすると上りきれずに戻る（勢いが足りない）。
  */
 export const LOOP_SAMPLE_LAYOUT: SliceLayout = {
   seed: 404,
   devices: [
-    { id: 'launcher_1', type: 'launcher', position: [-0.5, 1.4, -4.65], rotationYDeg: 0 },
+    { id: 'launcher_1', type: 'launcher', position: [-0.5, 1.4, -4.65], rotationYDeg: 0, params: { launchSpeed: 5.5 } },
     { id: 'rail_1', type: 'rail', position: [-0.5, 1.4, -3], rotationYDeg: 0, params: { slopeMeters: 0.6 } },
     { id: 'rail_2', type: 'rail', position: [-0.5, 0.8, -1], rotationYDeg: 0, params: { slopeMeters: 0.6 } },
     { id: 'loop_1', type: 'loop', position: [-0.5, 0.6, 0], rotationYDeg: 0, params: { radius: 0.5 } },

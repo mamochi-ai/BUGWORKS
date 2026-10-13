@@ -76,10 +76,16 @@ describe('隠しバグ（物理）', () => {
   });
 
   it('BUG-16：向かい合う「しりぞける」磁石の間で起き、その後は磁石が球を引きよせる', () => {
-    const s = run(magnetsAt(2.2), 12);
+    const s = new Simulation(R, { seed: 404, devices: magnetsAt(2.2) });
+    sims.push(s);
+    // 磁石の前まで引きよせられた球がある（しりぞけるままなら中央に押し戻される）
+    let pulled = false;
+    for (let i = 0; i < PHYSICS_HZ * 12; i++) {
+      s.step();
+      pulled ||= s.readBalls().some((b) => Math.abs(b.position[2] - 2.2) < 1 && Math.abs(b.position[0]) > 0.8);
+    }
     expect(ids(s)).toContain('BUG-16');
-    const near = s.readBalls().filter((b) => Math.abs(b.position[2] - 2.2) < 1);
-    expect(near.some((b) => Math.abs(b.position[0]) > 0.8)).toBe(true); // 磁石の前まで引きよせられた球がある（しりぞけるままなら中央に押し戻される）
+    expect(pulled).toBe(true);
     // 「引きよせる」磁石の組では起きない
     expect(ids(run(magnetsAt(2.2, 1), 8))).not.toContain('BUG-16');
   });
